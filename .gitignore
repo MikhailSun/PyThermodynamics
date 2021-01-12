@@ -1,0 +1,54 @@
+/CML2model_dvigatel_na_stende_for_identification.dat
+/CMLmodel_dvigatel_na_stende_for_identification.dat
+/maps/
+/models/
+/2019_1202_ЦНТИ_ЦД_ГТД-Отчет_финал.docx
+/для оптимизации в IOSO/
+/ident_coefs.png
+/результаты увязок/
+/ident_errors.png
+/субмодели для бенч/
+/Figure 2020-09-17 200213.png
+/исходники характеристик/
+/GTE-170.dat
+/venv/
+/ГУ для CFX для расчета характеристик ТК/
+/identification.log
+/influence coefficients.xlsx
+/influence coefficients_test.xlsx
+/influence_coefficients.xlsx
+/input_data_for_identification.dat
+/influence_coefficients_21_2017.xlsx
+/input_data_jetcat_model.dat
+/input_data_GTE170.dat
+/influence_coefficients_VZL_tablitsa_rejimov.xlsx
+/influence_coefficients2.xlsx
+/info.log
+/model_dvigatel_na_stende.dat
+/model_dvigatel_na_stende_2600016021_12_05_2019_.dat
+/model_dvigatel_na_stende_for_identification.dat
+/model_input_data.dat
+/model_jetcat.dat
+/monitor*.png
+/Pipfile
+/Pipfile.lock
+/residuals.png
+/rezults.csv
+/test.dat
+/test_property_python.py
+/test2.py
+/test charts.py
+/test_nozzle.py
+/test_save_function.dat
+/test_re.py
+/test_compressor_map.py
+/test_Parser.py
+/test.py
+/thermodynamics_c_v1.py
+/Dll1.dll
+/TK CFD 2020 08_output.dat
+/TK CFD 2020 08_output_output.dat
+/variables.png
+/обработанные результаты испытаний, дроссельная характеристика.xlsx
+/общий вид - видно что кпд на ветке 0,85 выбивается из общей закономерности.png
+/утечка Джеткэт.JPG
