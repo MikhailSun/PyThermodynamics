@@ -320,10 +320,10 @@ def Sf(T,mass_comp):
 def S(P,T,mass_comp,R):
     return Sf(T,mass_comp) - Sf(Tzero,mass_comp) - R*np.log(P / Pzero)
 #коэффициент адиабаты
+
 def k(T,mass_comp,R):
     return 1/(1-R/Cp(T,mass_comp))
 #вычисление температуры смеси по ее теплоемкости
-    
 
 def T_thru_Cp(Cp_value,mass_comp,x_min,x_max):
     func=lambda T: Cp(T,mass_comp)-Cp_value

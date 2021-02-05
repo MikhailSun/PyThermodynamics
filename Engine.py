@@ -49,6 +49,7 @@ import pandas as pd
 import copy
 import sys
 import os
+import pathlib
 import re
 import datetime
 from scipy.optimize import root 
@@ -211,9 +212,10 @@ class Engine():
             self.Ne=self.turb.N+self.compr.N
         
     def read_modes_from_input_data(self,input_filename):#чтение из внешнего файла, задаваемого пользователем, данных о необходимых для расчета режимов. Обычно это файл input_data.dat
-        current_dir=os.getcwd()
+        # current_dir=os.getcwd()
+        current_dir=pathlib.Path(__file__).parent.absolute()
         # files=os.listdir(current_dir)
-        solverLog.info('Current working directory: '+current_dir)
+        solverLog.info('Current working directory: '+str(current_dir))
         solverLog.info('Searching input data...')
         
         if len(input_filename)>0: #если имя файла передано вручную через параметр input_filename

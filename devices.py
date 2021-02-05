@@ -606,8 +606,8 @@ class Compressor():
 #        id_names.append(name)
 #        id_links.append(self)
         engine.devices[name] = self
-        self.variable_guide_vanes=initial_data.get((name+'_variable_guide_vanes'),False) #параметр, который говорит о том, будут ли использоваться поворотные направляющие аппараты. Если да, то алгоритм ожидает дополнительный варьируемый параметр - угол поворота НА и несколько характеристик компрессора, соответствующих различным углам НА
-        self.rotor=int(initial_data[name+'_rotor']) #номер ротора (этот номер должен быть согласован с другими узлами ГТД на этом же роторе, т.е. узлы (турбина) на одном роторе имеют один номер ротора). номер ротора должен начинаться от 1 (не 0!). Все ротора должны иметь последовательные номера в порядке возрастания от 1.
+        self.variable_guide_vanes=initial_data.get((name+'.variable_guide_vanes'),False) #параметр, который говорит о том, будут ли использоваться поворотные направляющие аппараты. Если да, то алгоритм ожидает дополнительный варьируемый параметр - угол поворота НА и несколько характеристик компрессора, соответствующих различным углам НА
+        self.rotor=int(initial_data[name+'.rotor']) #номер ротора (этот номер должен быть согласован с другими узлами ГТД на этом же роторе, т.е. узлы (турбина) на одном роторе имеют один номер ротора). номер ротора должен начинаться от 1 (не 0!). Все ротора должны иметь последовательные номера в порядке возрастания от 1.
         self.name_of_n='n'+str(self.rotor)
         self.name_of_betta=name+'_betta'
         self.name_of_G_error=name+'_G'
@@ -627,13 +627,13 @@ class Compressor():
         self.inlet=upstream.outlet
         self.outlet=td.CrossSection(self.name)
         
-        _F=initial_data.get((name+'_F_inlet'),np.nan)
+        _F=initial_data.get((name+'.F_inlet'),np.nan)
         if ~np.isnan(self.inlet.F) and ~np.isnan(_F):
             print('В узлах %s и %s конфликт площадей: %.3f и %.3f' % (self.name,self.upstream.name,_F,self.inlet.F))
             raise SystemExit
         elif np.isnan(self.inlet.F) and ~np.isnan(_F):
             self.inlet.F=_F
-        self.outlet.F=initial_data.get((name+'_F_outlet'),np.nan)
+        self.outlet.F=initial_data.get((name+'.F_outlet'),np.nan)
         
         self.n_phys=np.nan #физические обороты ротора
         self.n_corr=np.nan#приведенные обороты ротора
@@ -648,18 +648,18 @@ class Compressor():
         self.angle=np.nan
         self.Re=np.nan
         #коэффициенты А - искусственные поправочные коэффициенты к характеристикам
-        self.A_G_ncorr=initial_data.get((name+'_A_G_ncorr'),default_function(1))
+        self.A_G_ncorr=initial_data.get((name+'.A_G_ncorr'),default_function(1))
         self.A_G_ncorr.check_parameters(self) #TODO! подумать, как можно сделать так, чтобы объединить эту строку и выше одним методом. Т.е. предыдущая строка извлекает указатель на функцию из массива исходных данных, а эта - передает ему в качестве аргумента доп информацию - указатель на данный экземпляр класса, который заранее неизвестен.
-        self.A_PR_ncorr=initial_data.get(name+'_A_PR_ncorr',default_function(1))
+        self.A_PR_ncorr=initial_data.get(name+'.A_PR_ncorr',default_function(1))
         self.A_PR_ncorr.check_parameters(self)
-        self.A_Eff_ncorr=initial_data.get(name+'_A_Eff_ncorr',default_function(1))
+        self.A_Eff_ncorr=initial_data.get(name+'.A_Eff_ncorr',default_function(1))
         self.A_Eff_ncorr.check_parameters(self)
         
-        self.A_G_Re=initial_data.get((name+'_A_G_Re'),default_function(1)) 
+        self.A_G_Re=initial_data.get((name+'.A_G_Re'),default_function(1))
         self.A_G_Re.check_parameters(self)
-        self.A_PR_Re=initial_data.get((name+'_A_PR_Re'),default_function(1))
+        self.A_PR_Re=initial_data.get((name+'.A_PR_Re'),default_function(1))
         self.A_PR_Re.check_parameters(self)
-        self.A_Eff_Re=initial_data.get((name+'_A_Eff_Re'),default_function(1))
+        self.A_Eff_Re=initial_data.get((name+'.A_Eff_Re'),default_function(1))
         self.A_Eff_Re.check_parameters(self)
         
         self.A_G_ncorr_value=np.nan
@@ -670,19 +670,19 @@ class Compressor():
         self.A_Eff_Re_value=np.nan
         
         #для увязки
-        self.ident_G_value=initial_data.get('ident_'+name+'_G',1.0)
-        self.ident_PR_value=initial_data.get('ident_'+name+'_PR',1.0)
-        self.ident_Eff_value=initial_data.get('ident_'+name+'_Eff',1.0)
-        self.ident_n_value=initial_data.get('ident_'+name+'_n',1.0)
+        self.ident_G_value=initial_data.get('ident.'+name+'.G',1.0)
+        self.ident_PR_value=initial_data.get('ident.'+name+'.PR',1.0)
+        self.ident_Eff_value=initial_data.get('ident.'+name+'.Eff',1.0)
+        self.ident_n_value=initial_data.get('ident.'+name+'.n',1.0)
         
-        self.T_inlet_design_point=initial_data[name+'_T_inlet_dp']#температура на входе в расчетной точке (т.е. на режиме, на котором проводилось проектирование компрессора)
-        self.P_inlet_design_point=initial_data[name+'_P_inlet_dp']#авление на входе в расчетной точке (т.е. на режиме, на котором проводилось проектирование компрессора)
+        self.T_inlet_design_point=initial_data[name+'.T_inlet_dp']#температура на входе в расчетной точке (т.е. на режиме, на котором проводилось проектирование компрессора)
+        self.P_inlet_design_point=initial_data[name+'.P_inlet_dp']#авление на входе в расчетной точке (т.е. на режиме, на котором проводилось проектирование компрессора)
         
          #TODO!!! Временный костыль!!! убоать! 
         if engine.name_of_engine!='GTE-170':
-            self.G_map=initial_data[name+'_G_map']
-            self.PR_map=initial_data[name+'_PR_map']
-            self.Eff_map=initial_data[name+'_Eff_map']
+            self.G_map=initial_data[name+'.G_map']
+            self.PR_map=initial_data[name+'.PR_map']
+            self.Eff_map=initial_data[name+'.Eff_map']
         else:
             with open(os.getcwd()+'/'+'maps/GTE-170/2020_11_12_compr_var1/GTE170 Compressor CFD 2020_11.dat', 'rb') as f:
                 data_map = pickle.load(f)
@@ -697,7 +697,7 @@ class Compressor():
             Effplus30=data_map['Effplus30']
             
             def G_map(n,betta,angle):
-                x_angle=np.array([3.0,-16.8,-30.0])
+                x_angle=np.array([3.0,-13.8,-30.0])
                 y_G=np.array([Gminus3(n,betta)[0][0],Gplus168(n,betta)[0][0],Gplus30(n,betta)[0][0]])
                 G_f=np.poly1d(np.polyfit(x_angle,y_G,2))
                 _angle=3.0 if angle>3.0 else (-30.0 if angle<-30.0 else angle)
@@ -705,7 +705,7 @@ class Compressor():
             self.G_map=G_map
             
             def PR_map(n,betta,angle):
-                x_angle=np.array([3.0,-16.8,-30.0])
+                x_angle=np.array([3.0,-13.8,-30.0])
                 y_PR=np.array([PRminus3(n,betta)[0][0],PRplus168(n,betta)[0][0],PRplus30(n,betta)[0][0]])
                 PR_f=np.poly1d(np.polyfit(x_angle,y_PR,2))
                 _angle=3.0 if angle>3.0 else (-30.0 if angle<-30.0 else angle)
@@ -713,7 +713,7 @@ class Compressor():
             self.PR_map=PR_map
 
             def Eff_map(n,betta,angle):
-                x_angle=np.array([3.0,-16.8,-30.0])
+                x_angle=np.array([3.0,-13.8,-30.0])
                 y_Eff=np.array([Effminus3(n,betta)[0][0],Effplus168(n,betta)[0][0],Effplus30(n,betta)[0][0]])
                 Eff_f=np.poly1d(np.polyfit(x_angle,y_Eff,2))
                 _angle=3.0 if angle>3.0 else (-30.0 if angle<-30.0 else angle)
@@ -807,7 +807,7 @@ class Compressor():
 
 #        Ls=self.outlet.Hs-self.inlet.H
 #        self.Effts=L_isentropic/Ls #!!!вспомнить как считается кпд по статическим параметрам
-#        self.dKy #!!!реализовать расчет ГДУ
+#        self.dKy #TODO!!!реализовать расчет ГДУ
         
     def status(self):
         print('ПАРАМЕТРЫ КОМПРЕССОРА:')
@@ -825,7 +825,7 @@ class Turbine():
 #        id_names.append(name)
 #        id_links.append(self)
         engine.devices[name] = self
-        self.rotor=int(initial_data[name+'_rotor']) #номер ротора (этот номер должен быть согласован с другими узлами ГТД на этом же роторе, т.е. узлы (турбина) на одном роторе имеют один номер ротора)
+        self.rotor=int(initial_data[name+'.rotor']) #номер ротора (этот номер должен быть согласован с другими узлами ГТД на этом же роторе, т.е. узлы (турбина) на одном роторе имеют один номер ротора)
         self.name_of_n='n'+str(self.rotor)
         self.name_of_betta=name+'_betta'
         self.name_of_error=name+'_capacity'
@@ -846,7 +846,13 @@ class Turbine():
         self.sigmaNGV=1#потери полного давления в сопловом аппарате !!!(в данной модели исходим из того, что сигма = 1, иначе нужно подумать как быть с пропускной способностью - смотри пояснения к Cap_map ниже)
         self.Efftt=np.nan#кпд
         self.Effts=np.nan#кпд по статическим параметрам на выходе
-        self.Eff_mech=initial_data.get((name+'_Eff_mech'),default_function(np.nan))#механический кпд
+        _Eff_mech=initial_data.get(name+'.Eff_mech',None)
+        if _Eff_mech is None:
+            self.Eff_mech=default_function(1.0)
+        elif isinstance(_Eff_mech,str):
+            self.Eff_mech = default_function(float(_Eff_mech))
+        else:
+            self.Eff_mech=initial_data.get((name+'.Eff_mech'))#механический кпд
         self.Eff_mech_value=np.nan
         self.N=np.nan#мощность турбины, отсюда уже вычтены потери от механического кпд и отборы мощности
         self.Alfa_outlet=np.nan
@@ -854,18 +860,18 @@ class Turbine():
         self.betta=np.nan#вспомогательная переменная, характеризующая положение расчетной точки на характеристике. Ее нормальное значение от 0 до 1, допускаются небольшие отклонения, которые говорят о том, что расчет идет в области экстраполяции, т.е. с низкой точностью
         self.Re=np.nan 
         
-        self.A_Cap_Re=initial_data.get((name+'_A_Cap_Re'),default_function(1))
+        self.A_Cap_Re=initial_data.get((name+'.A_Cap_Re'),default_function(1))
         self.A_Cap_Re.check_parameters(self)
-        self.A_PR_Re=initial_data.get((name+'_A_PR_Re'),default_function(1))
+        self.A_PR_Re=initial_data.get((name+'.A_PR_Re'),default_function(1))
         self.A_PR_Re.check_parameters(self)        
-        self.A_Eff_Re=initial_data.get((name+'_A_Eff_Re'),default_function(1))
+        self.A_Eff_Re=initial_data.get((name+'.A_Eff_Re'),default_function(1))
         self.A_Eff_Re.check_parameters(self)          
-        self.A_A_Re=initial_data.get((name+'_A_Alfa_Re'),default_function(1))
+        self.A_A_Re=initial_data.get((name+'.A_Alfa_Re'),default_function(1))
         self.A_A_Re.check_parameters(self)        
-        self.A_L_Re=initial_data.get((name+'_A_lambda_Re'),default_function(1))
+        self.A_L_Re=initial_data.get((name+'.A_lambda_Re'),default_function(1))
         self.A_L_Re.check_parameters(self)      
         
-        self.A_Eff_PR=initial_data.get((name+'_A_Eff_PR'),default_function(1))
+        self.A_Eff_PR=initial_data.get((name+'.A_Eff_PR'),default_function(1))
         self.A_Eff_PR.check_parameters(self)  
         
         self.A_Cap_Re_value=np.nan #коэффициенты А - искусственные поправочные коэффициенты к характеристикам
@@ -877,38 +883,38 @@ class Turbine():
         self.A_Eff_PR_value=np.nan
         
         #для увязки
-        self.ident_Cap_value=initial_data.get('ident_'+name+'_Cap',1.0)
-        self.ident_PR_value=initial_data.get('ident_'+name+'_PR',1.0)
-        self.ident_Eff_value=initial_data.get('ident_'+name+'_Eff',1.0)
-        self.ident_n_value=initial_data.get('ident_'+name+'_n',1.0)
-        self.ident_A_value=initial_data.get('ident_'+name+'_A',1.0)
-        self.ident_L_value=initial_data.get('ident_'+name+'_L',1.0)
-        self.ident_Eff_mech_value=initial_data.get('ident_'+name+'_Eff_mech',1.0)
+        self.ident_Cap_value=initial_data.get('ident.'+name+'.Cap',1.0)
+        self.ident_PR_value=initial_data.get('ident.'+name+'.PR',1.0)
+        self.ident_Eff_value=initial_data.get('ident.'+name+'.Eff',1.0)
+        self.ident_n_value=initial_data.get('ident.'+name+'.n',1.0)
+        self.ident_A_value=initial_data.get('ident.'+name+'.A',1.0)
+        self.ident_L_value=initial_data.get('ident.'+name+'.L',1.0)
+        self.ident_Eff_mech_value=initial_data.get('ident.'+name+'.Eff_mech',1.0)
 
-        self.T_throttle_design_point=initial_data[name+'_T_inlet_dp']#температура в горле в расчетной точке (т.е. на режиме, на котором проводилось проектирование турбины)
-        self.P_inlet_design_point=initial_data[name+'_P_inlet_dp']#давление на входе в расчетной точке (т.е. на режиме, на котором проводилось проектирование турбины)
-        self.Cap_map=initial_data[name+'_Capacity_map'] #!!!есть одна особенность с вычислением пропускной способности. Для экспериментальных характеристик обычно используют давление перед турбиной, а температуру и расход в горле. Это надо помнить и понимать и при необходимости корректировать модель. В данном случае будем подразумевать, что нужная нам пропускная способность - в горле
-        self.PR_map=initial_data[name+'_PR_map']
-        self.Eff_map=initial_data[name+'_Eff_map']
-        self.A_map=initial_data[name+'_A_map']
-        self.L_map=initial_data[name+'_L_map']
-        self.N_offtake=initial_data.get((name+'_N_offtake'),0.0) #TODO! вообще лучше использовать самописный аналог функции get, потому что get не может возвращать функцию, а в initial_data иногда может задаваться функция для различных параметров. В данный момент в этой роли работает функция extract
+        self.T_throttle_design_point=initial_data[name+'.T_inlet_dp']#температура в горле в расчетной точке (т.е. на режиме, на котором проводилось проектирование турбины)
+        self.P_inlet_design_point=initial_data[name+'.P_inlet_dp']#давление на входе в расчетной точке (т.е. на режиме, на котором проводилось проектирование турбины)
+        self.Cap_map=initial_data[name+'.Capacity_map'] #!!!есть одна особенность с вычислением пропускной способности. Для экспериментальных характеристик обычно используют давление перед турбиной, а температуру и расход в горле. Это надо помнить и понимать и при необходимости корректировать модель. В данном случае будем подразумевать, что нужная нам пропускная способность - в горле
+        self.PR_map=initial_data[name+'.PR_map']
+        self.Eff_map=initial_data[name+'.Eff_map']
+        self.A_map=initial_data[name+'.A_map']
+        self.L_map=initial_data[name+'.L_map']
+        self.N_offtake=initial_data.get((name+'.N_offtake'),0.0) #TODO! вообще лучше использовать самописный аналог функции get, потому что get не может возвращать функцию, а в initial_data иногда может задаваться функция для различных параметров. В данный момент в этой роли работает функция extract
         self.Cap_error=np.nan
         self.Cap_map_calc=np.nan
-        _F=initial_data.get((name+'_F_inlet'),np.nan)
+        _F=initial_data.get((name+'.F_inlet'),np.nan)
         if ~np.isnan(self.inlet.F) and ~np.isnan(_F):
             print('В узлах %s и %s конфликт площадей: %.3f и %.3f' % (self.name,self.upstream.name,_F,self.inlet.F))
             raise SystemExit
         elif np.isnan(self.inlet.F) and ~np.isnan(_F):
             self.inlet.F=_F
 
-        self.throttle.F=initial_data.get((name+'_F_throttle'),np.nan)
-        self.outlet.F=initial_data.get((name+'_F_outlet'),np.nan)
+        self.throttle.F=initial_data.get((name+'.F_throttle'),np.nan)
+        self.outlet.F=initial_data.get((name+'.F_outlet'),np.nan)
         initial_data['amount_of_rotors'].add(self.rotor)
         initial_data['amount_of_betta']+=1
         self.betta_id=initial_data['amount_of_betta']
         
-        self.Re_dp=(1.019716e-005*initial_data[name+'_P_inlet_dp'])/td.Dyn_visc_klimov(initial_data[name+'_T_inlet_dp'])/(np.sqrt(initial_data[name+'_T_inlet_dp']))
+        self.Re_dp=(1.019716e-005*initial_data[name+'.P_inlet_dp'])/td.Dyn_visc_klimov(initial_data[name+'.T_inlet_dp'])/(np.sqrt(initial_data[name+'.T_inlet_dp'])) #TODO!!! проверить
         
 #        self.G_inlet_corr_map=np.nan #попробуем не использовать невязку по приведенному расходу между расчетной венличиной и характеристикой
     def calculate(self,engine):
@@ -1075,30 +1081,30 @@ class Combustor():
         self.alfa_manual=np.nan #альфа задаваемая вручную (в модели Климова задаем вручную)
         self.sigma=np.nan
         
-        self.sigma_map=initial_data.get((name+'_Sigma_map'),default_function(np.nan))
+        self.sigma_map=initial_data.get((name+'.Sigma_map'),default_function(np.nan))
         if self.sigma_map is np.nan:
             print('В исходных данных для узла '+self.name+' не задана характеристика потерь давления Sigma_map')
             raise SystemExit
         self.sigma_map.check_parameters(self)
         
-        self.Eff_map=initial_data.get(name+'_Eff_map',default_function(np.nan))
+        self.Eff_map=initial_data.get(name+'.Eff_map',default_function(np.nan))
         # if self.Eff_map.calculate() is np.nan:
         #     print('В исходных данных для узла '+self.name+' не задана характеристика полноты сгорания Eff_map')
         #     raise SystemExit  #TODO! обнаружился такой баг: при вызове self.Eff_map.calculate() функция пытается найти аргумент, необходимый ей для расчета alfa_manual, но на данном этапе  он неизвестен, отсюда приложение крашится
         self.Eff_map.check_parameters(self)
         
         #для увязки
-        self.ident_sigma_value=initial_data.get('ident_'+name+'_sigma',1.0)
-        self.ident_Eff_value=initial_data.get('ident_'+name+'_eff',1.0)
+        self.ident_sigma_value=initial_data.get('ident.'+name+'.sigma',1.0)
+        self.ident_Eff_value=initial_data.get('ident.'+name+'.eff',1.0)
         
         self.Eff=np.nan#кпд
         self.N_real=np.nan#тепловой поток от сгорания топлива
         self.N_ideal=np.nan#максимально возможный тепловой поток от сгорания топлива при его полном сгорании
-        self.Ginlet_dp=initial_data.get(name+'_G_inlet_dp',np.nan)
-        self.Pinlet_dp=initial_data.get(name+'_P_inlet_dp',np.nan)
-        self.Tinlet_dp=initial_data.get(name+'_T_inlet_dp',np.nan)
-        self.Eff_dp=initial_data.get(name+'_Eff_dp',np.nan)
-        self.Volume=initial_data.get(name+'_Volume',np.nan) #объем жаровой трубы
+        self.Ginlet_dp=initial_data.get(name+'.G_inlet_dp',np.nan)
+        self.Pinlet_dp=initial_data.get(name+'.P_inlet_dp',np.nan)
+        self.Tinlet_dp=initial_data.get(name+'.T_inlet_dp',np.nan)
+        self.Eff_dp=initial_data.get(name+'.Eff_dp',np.nan)
+        self.Volume=initial_data.get(name+'.Volume',np.nan) #объем жаровой трубы
         self.Gamma=np.nan #параметр из Gas Turbine Performance - Fletcher, вроед бы это что-то типа теплонапряженности КС
         self.Gamma_dp=Gamma(self.Ginlet_dp,self.Pinlet_dp,self.Tinlet_dp,self.Volume)
         
@@ -1106,18 +1112,18 @@ class Combustor():
         self.Th=np.nan
         self.Gair_in_burner=np.nan #расход воздуха через жаровую трубу, т.е. с вычитом воздуха на отборы из КС
         self.G_fuel=np.nan
-        self.T_fuel=initial_data[name+'_T_fuel'] #TODO! сделать так, чтобы температуру топлива можно было задавать как констртанту, как функцию или чтобы по умолчанию она равнялась температуре окружающей среды
+        self.T_fuel=initial_data[name+'.T_fuel'] #TODO! сделать так, чтобы температуру топлива можно было задавать как констртанту, как функцию или чтобы по умолчанию она равнялась температуре окружающей среды
         self.H_fuel=np.nan
         self.Hu_real=np.nan
         self.Hu_ideal_298=np.nan
         self.mass_comp_fuel=initial_data['mass_comp_fuel']
-        _F=initial_data.get((name+'_F_inlet'),np.nan)
+        _F=initial_data.get((name+'.F_inlet'),np.nan)
         if ~np.isnan(self.inlet.F) and ~np.isnan(_F):
             print('В узлах %s и %s конфликт площадей: %.3f и %.3f' % (self.name,self.upstream.name,_F,self.inlet.F))
             raise SystemExit
         elif np.isnan(self.inlet.F) and ~np.isnan(_F):
             self.inlet.F=_F
-        self.outlet.F=initial_data.get((name+'_F_outlet'),np.nan)
+        self.outlet.F=initial_data.get((name+'.F_outlet'),np.nan)
         
     def calculate(self,engine):
 #        должны быть заданы Pinlet, Tinlet, Tfuel, Gfuel, Gair, dp(Ginlet, Pinlet, Tinlet)
@@ -1170,25 +1176,25 @@ class Channel():
         self.inlet=upstream.outlet
         self.outlet_ideal=td.CrossSection(self.name)
         self.outlet=td.CrossSection(self.name)
-        _F=initial_data.get((name+'_F_inlet'),np.nan)
+        _F=initial_data.get((name+'.F_inlet'),np.nan)
         if ~np.isnan(self.inlet.F) and ~np.isnan(_F):
             print('В узлах %s и %s конфликт площадей: %.3f и %.3f' % (self.name,self.upstream.name,_F,self.inlet.F))
             raise SystemExit
         elif np.isnan(self.inlet.F) and ~np.isnan(_F):
             self.inlet.F=_F
 
-        self.outlet_ideal.F=initial_data.get((name+'_F_outlet'),np.nan)
+        self.outlet_ideal.F=initial_data.get((name+'.F_outlet'),np.nan)
         self.sigma=np.nan
         
         #в узлах типа "канал" функция потерь полного давления может зависеть от одного аргумента - приведенный расход на входе в канал 
-        self.sigma_map=initial_data.get((name+'_Sigma_map'),np.nan)
+        self.sigma_map=initial_data.get((name+'.Sigma_map'),np.nan)
         if self.sigma_map is np.nan:
-            print('В исходных данных для узла '+self.name+' не задана характеристика потерь давления Sigma_map')
+            solverLog.info('Error! В исходных данных для узла '+self.name+' не задана характеристика потерь давления Sigma_map')
             raise SystemExit
         self.sigma_map.check_parameters(self)
         
         #для увязки
-        self.ident_sigma_value=initial_data.get('ident_'+name+'_sigma',1.0)
+        self.ident_sigma_value=initial_data.get('ident.'+name+'.sigma',1.0)
 
         self.fi=initial_data.get((name+'_fi'),1.0) #коэффициент скорости, в основном нужен для сопла, для прочих условий принимаем его равным 1
         self.Eff=np.nan
@@ -1419,7 +1425,7 @@ class Secondary_Air_System():
         self.ident_G={} #в словаре будут храниться увязочные коэффициенты на величину абсолютного расхода, ключ словаря соответствует номеру отбора из массива self.air_bleed_out.количество элементов с списке равно количеству отборов
         for bleed_out_instance in self.air_bleed_out:
             _number_of_bleed=bleed_out_instance['N'][0]
-            self.ident_G[_number_of_bleed]=initial_data.get('ident_SAS_G'+str(_number_of_bleed),1.0)
+            self.ident_G[_number_of_bleed]=initial_data.get('ident.SAS.G'+str(_number_of_bleed),1.0)
         
         #ищем чему равен ссылочный расход воздуха, относительно которого задаются расходы воздуха
         temp_Gref=initial_data['air_bleed_Greference'].split(',')

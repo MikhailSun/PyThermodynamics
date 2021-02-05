@@ -61,22 +61,27 @@ class Preloader():
 
                 if self.currentSectionName == 'Calculated parameters':
                     line = line.replace(' ', '')
-                    res = re.match(r'(\S+)\ *=\ *(\S+)\ *\(\s*(.+)\s*\)', line)
+                    # res = re.match(r'(\S+)\ *=\ *(\S+)\ *\(\s*(.+)\s*\)', line)
+                    res = re.match(r'(\S+)\ *={1}(?:\ *(\S+)\ *\(\s*(.+)\s*\)|\ *(\d+\.*\d*)\ *)',line)
 
                     if res == None: # constant
                         initialData[a[0]] = uf.UserFunction(a[0], "", "", a[1], 3)
                     else:
                         paramName = res.group(1)
-                        paramFunc = res.group(2)
-                        funcArg = res.group(3)
-                        if funcArg[0] == '[' and funcArg[-1] == ']':
-                            self.funcs[paramFunc].params = list(funcArg[1:-1].split(','))
+                        if res.group(2)==None:
+                            paramValue=res.group(4)
+                            initialData[paramName] = paramValue
                         else:
-                            self.funcs[paramFunc].params = funcArg
-                        if paramFunc in self.funcs:
-                            initialData[paramName] = self.funcs[paramFunc]
-                        else:
-                            print("ERROR") # what i am doing here
+                            paramFunc = res.group(2)
+                            funcArg = res.group(3)
+                            if funcArg[0] == '[' and funcArg[-1] == ']':
+                                self.funcs[paramFunc].params = list(funcArg[1:-1].split(','))
+                            else:
+                                self.funcs[paramFunc].params = funcArg
+                            if paramFunc in self.funcs:
+                                initialData[paramName] = self.funcs[paramFunc]
+                            else:
+                                print("ERROR") # what i am doing here
                 if self.currentSectionName == "Parameters":
                     initialData[var_name] = var_val
                 if self.currentSectionName == "Composition_of_inlet_gas":
@@ -128,15 +133,15 @@ class Preloader():
 
     def getCompressorMap(self, name, data):
         solverLog.info('Compressor map of '+name+': '+self.preInitialData[name])
-        data[f"{name}_G_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "compressor")['G_function']
-        data[f"{name}_PR_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "compressor")['PR_function']
-        data[f"{name}_Eff_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "compressor")['Eff_function']
+        data[f"{name}.G_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "compressor")['G_function']
+        data[f"{name}.PR_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "compressor")['PR_function']
+        data[f"{name}.Eff_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "compressor")['Eff_function']
 
     def getTurbineMap(self, name, data):
         solverLog.info('Turbine map of '+name+': '+self.preInitialData[name])
-        data[f"{name}_Capacity_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "turbine")['G_function']
-        data[f"{name}_PR_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "turbine")['PR_function']
-        data[f"{name}_Eff_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "turbine")['Eff_function']
-        data[f"{name}_A_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "turbine")['Alfa_function']
-        data[f"{name}_L_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "turbine")['Lambda_function']
+        data[f"{name}.Capacity_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "turbine")['G_function']
+        data[f"{name}.PR_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "turbine")['PR_function']
+        data[f"{name}.Eff_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "turbine")['Eff_function']
+        data[f"{name}.A_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "turbine")['Alfa_function']
+        data[f"{name}.L_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "turbine")['Lambda_function']
 
