@@ -26,6 +26,7 @@ dT=0.1
 #TODO!!! как-то нужно сделать возможность задавать размерность для характеристик турбины и компрессора, чтобы прога сама преобразовывала в нужные ей единицы СИ
 #TODO!!! сделать переключатель для масштабирования характеристик компрессора и турбины: чтобы можно было масштабировать либо простым умножением на поправочный коэффициент, либо сначала вычесть единицу, пототм домножить, а поттом снова прибавить единицу
 #TODO!!! сделать механизм, который бы обеспечивал невылет расчета если давление в точке подвода больше чем в точке отбора
+#TODO!!! нужно бы переделать все узлы через механизм свойств
 
 #класс для описания всех параметров в сечении потока
 """
@@ -1001,55 +1002,7 @@ def Hu(T_fuel,T_air,T_gas,G_fuel,G_air,mass_comp_air,mass_comp_fuel,mass_comp_ga
 #т.е. нужно точно знать какое топливо применяется, его теплофизические/термодинамические свойства, молярная масса, условный состав (или взамен стехиометрическую постоянную и газовую постоянную и т.п) и на основе этих данных корректировать алгоритм
 #состав рабочего тела задаем в формате mass_comp(N2,O2,Ar,CO2,H2O,керосин_газ,керосин_жидкий)
 
-def Combustion_properties(mass_comp_air, mass_comp_fuel, G_fuel, G_air, H_fuel, H_air, Eff_brn):
-    #вводим коэффициенты x и y из условной формулы керосина CxHy
-    # x=12 #оказалось проблемой найти некоторые свойства керосина как ТС-1, так и Jet-A. В книге "Инженерные методы определения физ-хим и эксплуатационных свойств топлив. Дубовкин. Казань, 2000" есть формула для вычисления условного состава керосина - см.стр.13
-    # y=23.325 #молярная масса керосина Jet-A известна достоверно 167,31102 г/моль, керосина ТС-1 - достоверных данных найти не удалось, но вроде бы 156г/моль или 146???. Для керосина ТС-1 массовая доля углерода 85,7-85,8% (примем 85,95%), водорода 14-14,1% - данные отсюда:
-    # Дубовкин Маланичева "Физ хим и эксплуатационные свойства реактивных топлив", Москва, 1985. По Jet-A найти таких данных не смог. исходя из всего выше сказанного используя массовый состав ТС-1 и молярную массу jet-A (т.к. по нему гораздо больше данных) находим условную 
-    #формулу керосина C11.973H23.316. Теплотворная способность керосина и стехиометрическая постоянная даже получилась довольно близкой к табличным данным Hu=43196794.46 и L=14.707
-    x=1;y=4
-    #второй вариант. В книге Дубовкин Маланичева "Физ хим и эксплуатационные свойства реактивных топлив", Москва, 1985, стр.92, табл.3.1 указано, что теплотворная способность ТС-1 43,21-43,37МДж/кг, там же стехиометрическая постоянная примерно 14,73 (стр.114). Отсюда искусственно подбираем условный состав топлива так, чтобы Hu и L были соответствующими C12H23.325
-    G_fuel_brnt=G_fuel*mass_comp_fuel[7]*Eff_brn 
-    G_fuel_not_brnt=G_fuel*mass_comp_fuel[7]*(1-Eff_brn)#допущение: несгоревшее топливо осталось в продуктах сгорания в виде газообразного керосина
-    Nu_fuel_brnt=G_fuel_brnt/td.MolW_CH4
-    Nu_O2=(x+y/4)*Nu_fuel_brnt #в литературе 17,875 называется обычно стехиометрическим коэффициентом, который говорит сколько нужно атомов кислорода для полного сгорания топлива
-    G_O2_from_brnt_air=Nu_O2*td.MolW_O2
-    G_N2_from_brnt_air=G_O2_from_brnt_air*mass_comp_air[0]/mass_comp_air[1]
-    G_CO2_from_brnt_air=G_O2_from_brnt_air*mass_comp_air[3]/mass_comp_air[1]
-    G_Ar_from_brnt_air=G_O2_from_brnt_air*mass_comp_air[2]/mass_comp_air[1]
-    G_H2O_from_brnt_air=G_O2_from_brnt_air*mass_comp_air[4]/mass_comp_air[1]
-    G_brnt_air=G_O2_from_brnt_air+G_N2_from_brnt_air+G_CO2_from_brnt_air+G_Ar_from_brnt_air+G_H2O_from_brnt_air
-    L0=G_brnt_air/G_fuel_brnt #если топливо многокомпонентное, то надо переделать
-    alfa=G_air/G_brnt_air
-    G_not_brnt_air=G_air-G_brnt_air
-    G_N2_from_not_brnt_air=G_not_brnt_air*mass_comp_air[0]
-    G_CO2_from_not_brnt_air=G_not_brnt_air*mass_comp_air[3]
-    G_Ar_from_not_brnt_air=G_not_brnt_air*mass_comp_air[2]
-    G_O2_from_not_brnt_air=G_not_brnt_air*mass_comp_air[1]
-    G_H2O_from_not_brnt_air=G_not_brnt_air*mass_comp_air[4]
-    Nu_CO2=x*Nu_fuel_brnt #12 - стехиометричекий коэффициент
-    Nu_H2O=(y/2)*Nu_fuel_brnt #11,75 - стехиометричекий коэффициент
-    G_CO2_from_comb_prod=Nu_CO2*td.MolW_CO2
-    G_H2O_from_comb_prod=Nu_H2O*td.MolW_H2O
-    G_N2_outlet=G_N2_from_brnt_air+G_N2_from_not_brnt_air
-    G_CO2_outlet=G_CO2_from_brnt_air+G_CO2_from_not_brnt_air+G_CO2_from_comb_prod
-    G_Ar_outlet=G_Ar_from_brnt_air+G_Ar_from_not_brnt_air
-    G_O2_outlet=G_O2_from_not_brnt_air
-    G_H2O_outlet=G_H2O_from_brnt_air+G_H2O_from_not_brnt_air+G_H2O_from_comb_prod
-    G_fuel_outlet=G_fuel_not_brnt
-    G_comb_prod=G_N2_outlet+G_CO2_outlet+G_Ar_outlet+G_O2_outlet+G_H2O_outlet+G_fuel_outlet
-    mass_comp_gas=np.empty(td.Number_of_components)#!!!для быстродействия вероятно стоит как-то изменить эту часть кода, надо копать в сторону массивов numpy
-    mass_comp_gas[0]=G_N2_outlet/G_comb_prod  
-    mass_comp_gas[1]=G_O2_outlet/G_comb_prod
-    mass_comp_gas[2]=G_Ar_outlet/G_comb_prod
-    mass_comp_gas[3]=G_CO2_outlet/G_comb_prod
-    mass_comp_gas[4]=G_H2O_outlet/G_comb_prod
-    mass_comp_gas[5]=0
-    mass_comp_gas[6]=0 #все топливо либо сгорело, либо испарилось
-    mass_comp_gas[7]=G_fuel_outlet/G_comb_prod #это для газа CH4
-    H_comb_prod=(H_fuel*G_fuel+H_air*G_air)/G_comb_prod #в этой формуле отдельно учитывается энергия, идущая на испарения топлива. По-моему эта формулы не учитывает полноту сгорания
-    Hu=-(td.H(298.15,mass_comp_gas)*(G_comb_prod)-(td.H(298.15,mass_comp_fuel)*G_fuel+td.H(298.15,mass_comp_air)*G_air))/G_fuel
-    return [L0, alfa, mass_comp_gas, H_comb_prod, Hu]
+
    
 #свойства воздуха и топлива
 # dry_air_test=np.array([7.5512e-01, 2.3150e-01, 1.2920e-02, 4.6000e-04, 0.0000e+00, 0.0000e+00,0.0000e+00])
@@ -1076,28 +1029,28 @@ class Combustor():
         self.upstream=upstream
         self.inlet=upstream.outlet
         self.outlet=td.CrossSection(self.name)
-        self.L0=np.nan
         self.alfa=np.nan #альфа рассчитываемая автоматом
         self.alfa_manual=np.nan #альфа задаваемая вручную (в модели Климова задаем вручную)
-        self.sigma=np.nan
-        
-        self.sigma_map=initial_data.get((name+'.Sigma_map'),default_function(np.nan))
+
+        #в узлах типа "камера сгорания" должна задаваться функция потерь полного давления через раздел {Functions} в исходных данных
+        self.sigma_map=initial_data.get((name+'.sigma'),np.nan)
         if self.sigma_map is np.nan:
-            print('В исходных данных для узла '+self.name+' не задана характеристика потерь давления Sigma_map')
+            print('В исходных данных для узла '+self.name+' не задана характеристика потерь давления sigma')
             raise SystemExit
-        self.sigma_map.check_parameters(self)
-        
-        self.Eff_map=initial_data.get(name+'.Eff_map',default_function(np.nan))
-        # if self.Eff_map.calculate() is np.nan:
-        #     print('В исходных данных для узла '+self.name+' не задана характеристика полноты сгорания Eff_map')
-        #     raise SystemExit  #TODO! обнаружился такой баг: при вызове self.Eff_map.calculate() функция пытается найти аргумент, необходимый ей для расчета alfa_manual, но на данном этапе  он неизвестен, отсюда приложение крашится
-        self.Eff_map.check_parameters(self)
+        # self.sigma_map.check_parameters(self)
+
+        # в узлах типа "камера сгорания" должна задаваться функция полнота сгорания через раздел {Functions} в исходных данных
+        self.eff_map=initial_data.get(name+'.eff',np.nan)
+        if self.eff_map is np.nan:
+            print('В исходных данных для узла '+self.name+' не задана характеристика полноты сгорания eff')
+            raise SystemExit  #TODO! обнаружился такой баг: при вызове self.Eff_map.calculate() функция пытается найти аргумент, необходимый ей для расчета alfa_manual, но на данном этапе  он неизвестен, отсюда приложение крашится
+        # self.Eff_map.check_parameters(self)
         
         #для увязки
         self.ident_sigma_value=initial_data.get('ident.'+name+'.sigma',1.0)
         self.ident_Eff_value=initial_data.get('ident.'+name+'.eff',1.0)
-        
-        self.Eff=np.nan#кпд
+
+        self.sigma = np.nan
         self.N_real=np.nan#тепловой поток от сгорания топлива
         self.N_ideal=np.nan#максимально возможный тепловой поток от сгорания топлива при его полном сгорании
         self.Ginlet_dp=initial_data.get(name+'.G_inlet_dp',np.nan)
@@ -1117,6 +1070,11 @@ class Combustor():
         self.Hu_real=np.nan
         self.Hu_ideal_298=np.nan
         self.mass_comp_fuel=initial_data['mass_comp_fuel']
+        self.L0_manual=initial_data.get((name+'.L0'),np.nan) #TODO! сделать алгоритм с возможностью задавать L0 вручную так, чтобы это влияло на состав продуктов сгорания, сейчас L0 dычисляется исходя из состава топлива CxHy
+        self.L0=td.Stoichiometric_const(Cx=1,Hy=4,mass_comp_air=engine.ambient.external_conditions.mass_comp, mass_comp_fuel=self.mass_comp_fuel) if np.isnan(self.L0_manual) else self.L0_manual
+
+
+
         _F=initial_data.get((name+'.F_inlet'),np.nan)
         if ~np.isnan(self.inlet.F) and ~np.isnan(_F):
             print('В узлах %s и %s конфликт площадей: %.3f и %.3f' % (self.name,self.upstream.name,_F,self.inlet.F))
@@ -1124,7 +1082,8 @@ class Combustor():
         elif np.isnan(self.inlet.F) and ~np.isnan(_F):
             self.inlet.F=_F
         self.outlet.F=initial_data.get((name+'.F_outlet'),np.nan)
-        
+
+
     def calculate(self,engine):
 #        должны быть заданы Pinlet, Tinlet, Tfuel, Gfuel, Gair, dp(Ginlet, Pinlet, Tinlet)
         
@@ -1142,10 +1101,9 @@ class Combustor():
         self.Gair_in_burner=self.inlet.G+(G0+Gmid+G1)
         # self.alfa_manual=1/14.947683109118086696562032884903/(self.G_fuel/self.Gair_in_burner) #TODO! должен задавать пользователь через исходные данные #TODO!!! стехиометрическая постоянная для керосина 14,73!!! почти наверняка, нужно проверить у иностранного кероисна
         self.outlet.G=self.Gair_in_burner+self.G_fuel
-        self.Eff=self.ident_Eff_value*self.Eff_map.calculate()   #*Efficiency_combustor(self.Gamma,self.Gamma_dp,self.Eff_dp) - вариант вычисления по методике из gas Turbine Performance
+        self.eff=self.ident_Eff_value*self.eff_map.calculate()   #*Efficiency_combustor(self.Gamma,self.Gamma_dp,self.Eff_dp) - вариант вычисления по методике из gas Turbine Performance
 
-        rez=Combustion_properties(self.inlet.mass_comp, self.mass_comp_fuel, self.G_fuel, self.Gair_in_burner,self.H_fuel,self.inlet.H, self.Eff)
-        self.L0=rez[0]
+        rez=td.Combustion_properties(self.inlet.mass_comp, self.mass_comp_fuel, self.G_fuel, self.Gair_in_burner,self.H_fuel,self.inlet.H, self.eff)
         self.alfa=rez[1]
         self.outlet.mass_comp=rez[2]
         self.outlet.H=rez[3]
@@ -1154,7 +1112,6 @@ class Combustor():
         self.N_real=self.G_fuel*self.Hu_real #реальная тепловая мощность сгорания топлива в кс 
         self.N_ideal=self.G_fuel*self.Hu_ideal_298
         self.outlet.calculate_thru_FG()
-#        !!!исправить расчет энтальпии в веществах, чтобы привести ее к нулю у всех веществ при заданной температуре Tzero
     def status(self):
         print('ПАРАМЕТРЫ КАМЕРЫ СГОРАНИЯ:')
         for att in dir(self):
@@ -1176,25 +1133,22 @@ class Channel():
         self.inlet=upstream.outlet
         self.outlet_ideal=td.CrossSection(self.name)
         self.outlet=td.CrossSection(self.name)
-        _F=initial_data.get((name+'.F_inlet'),np.nan)
+        _F=initial_data.get((name+'.inlet.F'),np.nan)
         if ~np.isnan(self.inlet.F) and ~np.isnan(_F):
-            print('В узлах %s и %s конфликт площадей: %.3f и %.3f' % (self.name,self.upstream.name,_F,self.inlet.F))
+            solverLog.error('В узлах %s и %s конфликт площадей: %.3f и %.3f' % (self.name,self.upstream.name,_F,self.inlet.F))
             raise SystemExit
         elif np.isnan(self.inlet.F) and ~np.isnan(_F):
             self.inlet.F=_F
 
-        self.outlet_ideal.F=initial_data.get((name+'.F_outlet'),np.nan)
-        self.sigma=np.nan
+        self.outlet_ideal.F=initial_data.get((name+'.outlet.F'),np.nan)
+
         
-        #в узлах типа "канал" функция потерь полного давления может зависеть от одного аргумента - приведенный расход на входе в канал 
-        self.sigma_map=initial_data.get((name+'.Sigma_map'),np.nan)
-        if self.sigma_map is np.nan:
-            solverLog.info('Error! В исходных данных для узла '+self.name+' не задана характеристика потерь давления Sigma_map')
-            raise SystemExit
-        self.sigma_map.check_parameters(self)
+        #в узлах типа "канал" должна задаваться функция потерь полного давления через раздел {Functions} в исходных данных
+        self.sigma=initial_data.get((name+'.sigma'),np.nan)
+        self.sigma_corrected=np.nan #тут будем хранить сигму с учетом поправок по увязочному коэффициенту
         
         #для увязки
-        self.ident_sigma_value=initial_data.get('ident.'+name+'.sigma',1.0)
+        self.ident_sigma=initial_data.get('ident.' + name + '.sigma', 1.0)
 
         self.fi=initial_data.get((name+'_fi'),1.0) #коэффициент скорости, в основном нужен для сопла, для прочих условий принимаем его равным 1
         self.Eff=np.nan
@@ -1207,6 +1161,17 @@ class Channel():
             self.perepusk=np.nan
         #TODO!!!NB!!! выше костыль - перепуск воздуха для ТВ7
 
+    @property
+    def sigma(self):
+        return self.sigma_map.calculate()
+
+    @property.setter
+    def sigma(self,x):
+        self.sigma_map=x
+        if self.sigma_map is np.nan:
+            solverLog.info('Error! В исходных данных для узла '+self.name+' не задана характеристика потерь давления sigma')
+            raise SystemExit
+
     def calculate(self,engine):
         #определить обязательные параметры
         """
@@ -1218,9 +1183,9 @@ class Channel():
         """
 
         self.inlet.calculate_thru_FG() #уточним параметры во входном сечении, т.к. если перед каналом стоит объект Ambient, то известны не все параметры, только P, T, G, mass_comp
-        self.sigma=self.ident_sigma_value*self.sigma_map.calculate() #!!!здесь должна быть какая-то функция, которая задает каким образом вычисляется потери в канале: либо постоянным числом, либо функцией, либо интерполяцией по точкам
-        
-        self.outlet_ideal.P=self.inlet.P*self.sigma
+        self.sigma_corrected=self.sigma*self.ident_sigma
+
+        self.outlet_ideal.P=self.inlet.P*self.sigma_corrected
                
         #здесь должен быть учет отборов, должны быть извсетны величины отбираемого воздуха
 #        secondary_air_system.update_Gref() #обновляем значение ссылочного расхода воздуха
@@ -1279,7 +1244,7 @@ class ConvergentNozzle(Channel): #сужающееся сопло
         self.name_of_error=self.name+'_flowdensity'
     def calculate(self,engine):       
         self.inlet.calculate_thru_FG() #уточним параметры во входном сечении, т.к. если перед каналом стоит объект Ambient, то известны не все параметры, только P, T, G, mass_comp
-        self.sigma=self.ident_sigma_value*self.sigma_map.calculate() #!!!здесь должна быть какая-то функция, которая задает каким образом вычисляется потери в канале: либо постоянным числом, либо функцией, либо интерполяцией по точкам
+        self.sigma= self.ident_sigma * self.sigma_map.calculate() #!!!здесь должна быть какая-то функция, которая задает каким образом вычисляется потери в канале: либо постоянным числом, либо функцией, либо интерполяцией по точкам
         
         self.outlet_ideal.P=self.inlet.P*self.sigma
                

@@ -157,7 +157,9 @@ class Engine():
         
         i = 0
         for name_of_device in initial_data["structure"]:
+            #инициализируем объект узла двигателя
             device = getattr(dev, initial_data["structure"][name_of_device])(initial_data, self.ambient if i == 0 else device, self, name=name_of_device)
+            #задаем этот объект узла кка один из параметров объекта двигателя
             setattr(self, name_of_device, device)
             i += 1
  

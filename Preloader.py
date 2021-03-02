@@ -8,6 +8,7 @@ import devices as dev
 import UserFunc as uf
 import logging
 import os
+import Parser as prs
 #import ThermoLog
 #ThermoLog.setup_logger('solverLog', 'info.log',logging.DEBUG)
 
@@ -59,48 +60,50 @@ class Preloader():
 
                     self.preInitialData[var_name] = var_val
 
-                if self.currentSectionName == 'Calculated parameters':
-                    line = line.replace(' ', '')
-                    # res = re.match(r'(\S+)\ *=\ *(\S+)\ *\(\s*(.+)\s*\)', line)
-                    res = re.match(r'(\S+)\ *={1}(?:\ *(\S+)\ *\(\s*(.+)\s*\)|\ *(\d+\.*\d*)\ *)',line)
-
-                    if res == None: # constant
-                        initialData[a[0]] = uf.UserFunction(a[0], "", "", a[1], 3)
-                    else:
-                        paramName = res.group(1)
-                        if res.group(2)==None:
-                            paramValue=res.group(4)
-                            initialData[paramName] = paramValue
-                        else:
-                            paramFunc = res.group(2)
-                            funcArg = res.group(3)
-                            if funcArg[0] == '[' and funcArg[-1] == ']':
-                                self.funcs[paramFunc].params = list(funcArg[1:-1].split(','))
-                            else:
-                                self.funcs[paramFunc].params = funcArg
-                            if paramFunc in self.funcs:
-                                initialData[paramName] = self.funcs[paramFunc]
-                            else:
-                                print("ERROR") # what i am doing here
+                # if self.currentSectionName == 'Calculated parameters':
+                #     line = line.replace(' ', '')
+                #     # res = re.match(r'(\S+)\ *=\ *(\S+)\ *\(\s*(.+)\s*\)', line)
+                #     res = re.match(r'(\S+)\ *={1}(?:\ *(\S+)\ *\(\s*(.+)\s*\)|\ *(\d+\.*\d*)\ *)',line)
+                #
+                #     if res == None: # constant
+                #         initialData[a[0]] = uf.UserFunction(a[0], "", "", a[1], 3)
+                #     else:
+                #         paramName = res.group(1)
+                #         if res.group(2)==None:
+                #             paramValue=res.group(4)
+                #             initialData[paramName] = paramValue
+                #         else:
+                #             paramFunc = res.group(2)
+                #             funcArg = res.group(3)
+                #             if funcArg[0] == '[' and funcArg[-1] == ']':
+                #                 self.funcs[paramFunc].params = list(funcArg[1:-1].split(','))
+                #             else:
+                #                 self.funcs[paramFunc].params = funcArg
+                #             if paramFunc in self.funcs:
+                #                 initialData[paramName] = self.funcs[paramFunc]
+                #             else:
+                #                 print("ERROR") # what i am doing here
                 if self.currentSectionName == "Parameters":
                     initialData[var_name] = var_val
                 if self.currentSectionName == "Composition_of_inlet_gas":
                     initialData[var_name] = np.array(var_val)
                 if self.currentSectionName == "Secondary air system":
                     initialData[var_name] = var_val
-                if self.currentSectionName == "Auxiliary functions":
-                    res = re.match(r'(\(.*\)),(\(.*\))', a[1])
-                    funcDecl = res.group(1)[1:-1]
-                    funcParam = res.group(2)[1:-1]
-                    _uf = uf.UserFunction(a[0], a[0], funcDecl, funcParam, 1)
-                    initialData[var_name] = _uf
-                    continue
+                # if self.currentSectionName == "Auxiliary functions":
+                #     res = re.match(r'(\(.*\)),(\(.*\))', a[1])
+                #     funcDecl = res.group(1)[1:-1]
+                #     funcParam = res.group(2)[1:-1]
+                #     _uf = uf.UserFunction(a[0], a[0], funcDecl, funcParam, 1)
+                #     initialData[var_name] = _uf
+                #     continue
                 if self.currentSectionName == "Functions":
+                    _func_object=prs.Parser_formula()
+                    _func_object.prepare_formula(line.split('#',1)[0].strip())
                     f_name = re.match(r'(\S+)\((\S+)\)', a[0])
                     funcName = f_name.group(1)
-                    funcDecl = a[1]
-                    _uf = uf.UserFunction(funcName, a[0], funcDecl, None, 2)
-                    self.funcs[funcName] = _uf
+                    # funcDecl = a[1]
+                    # _uf = uf.UserFunction(funcName, a[0], funcDecl, None, 2)
+                    self.funcs[funcName] = _func_object
                     continue
                 if a[0] in self.nodeTypes and self.currentSectionName == "Maps": #в a[0] должно храниться имя узла
 #                    logging.info('Maps loading')
@@ -118,7 +121,7 @@ class Preloader():
                         
                     
             if self.currentSectionName == "Name":
-                    initialData['name'] = line
+                initialData['name'] = line
             if self.currentSectionName == "Scheme":
                 a = line.split('-')
                 for _a in a:

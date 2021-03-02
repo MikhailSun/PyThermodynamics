@@ -5,7 +5,7 @@ Created on Fri Mar  6 10:55:11 2020
 @author: Sundukov
 """
 #TODO! сделать штуку, которая перед расчетом генерит графики всех пользовательских функций, чтобы оценить их адекватность
-import ast
+# import ast
 import numpy as np
 import logging
 import re
@@ -54,8 +54,9 @@ class Parser_formula():
     USER_DEFINED_FUNCTIONS={}
     #возможные типы данных, которые может парсить этот парсер: число, пользовательская функция, стандартная функция, математический оператор, аругмент пользовательской функции, параметр объекта, скобки
     POSSIBLE_TYPES=frozenset(['num','udf','udf_points','st_fun','op','arg','par','br'])
+    BASE_LINK_TO_EXTRACT=None
 
-    def __init__(self,link_to_extract=False):
+    def __init__(self,link_to_extract=BASE_LINK_TO_EXTRACT):
         self.base_link_to_extract=link_to_extract #тут будет хранитсья ссылка на базовые объект, отоносительно котрого будут задаваться параметры
         self.name_of_function=np.nan #тут будем хранить имя функции
         self.string_formula=np.nan #текстовая формула в человеческом виде
@@ -486,44 +487,46 @@ class Parser_formula():
 #4) calculate() - считаем формулу, на выходе д.б. float
 
 
-class test1():
-    def __init__(self):
-        self.devices = dict()
-        self.air_bleed_out = [{'G_abs_from': 3}, 2, 3]
+# class test1():
+#     def __init__(self):
+#         self.devices = dict()
+#         self.air_bleed_out = [{'G_abs_from': 3}, 2, 3]
+#
+# class test2():
+#     def __init__(self):
+#         self.N = np.nan
+#         self.N_offtake = 200
+#         self.Eff_mech_value = 0.99
+#
+# a=test1()
+# a.pt=test2()
+# a.pt.nnn=test2()
+# a.devices['pt']=a.pt
+# a.devices['air_bleed_out']=a.air_bleed_out
+# a.pt.N=1000
+# a.pt.N_offtake=2000
+# a.pt.Eff_mech_value=0.95
+# a.pt.test=2
+# a.x=1
+# a.y=1
+#
+#
+#
+# test_formula='analitical_fun(a,b)=a/b' #1-pt.N_-(-pt.N_offtake*-cos(1+0.57))/(pt.Eff_mech_value+300+ln(20))/1000+
+# test_formula2='function2(aa,bb,cc,dd)=func_points(x=aa)+func_points(x=bb)+analitical_fun(a=cc,b=dd)' #x+y/z*(-tg(0.8925))+sin(rad(30))+function(x_=4,y_=pt.test)+
+# test_formula4='test_function(z)=2>1?2>3:3<2'
+# test_formula3='test_func()=1-pt.N-(-pt.N_offtake*-cos(1+0.57))/(pt.Eff_mech_value+300+ln(20))/1000+x/y+test_function(z=1)'
+# test_formula5='func_points(x)=[x=1,2,3,4;y=2.5,3,3.1,2.5;k=1;s=0;ext=0]' #scipy.interpolate.UnivariateSpline
+test_formula6='2'
 
-class test2():
-    def __init__(self):
-        self.N = np.nan
-        self.N_offtake = 200
-        self.Eff_mech_value = 0.99
-
-a=test1()
-a.pt=test2()
-a.pt.nnn=test2()
-a.devices['pt']=a.pt
-a.devices['air_bleed_out']=a.air_bleed_out
-a.pt.N=1000
-a.pt.N_offtake=2000
-a.pt.Eff_mech_value=0.95
-a.pt.test=2
-a.x=1
-a.y=1
-
-
-
-test_formula='analitical_fun(a,b)=a/b' #1-pt.N_-(-pt.N_offtake*-cos(1+0.57))/(pt.Eff_mech_value+300+ln(20))/1000+
-test_formula2='function2(aa,bb,cc,dd)=func_points(x=aa)+func_points(x=bb)+analitical_fun(a=cc,b=dd)' #x+y/z*(-tg(0.8925))+sin(rad(30))+function(x_=4,y_=pt.test)+
-test_formula4='test_function(z)=2>1?2>3:3<2'
-test_formula3='test_func()=1-pt.N-(-pt.N_offtake*-cos(1+0.57))/(pt.Eff_mech_value+300+ln(20))/1000+x/y+test_function(z=1)'
-test_formula5='func_points(x)=[x=1,2,3,4;y=2.5,3,3.1,2.5;k=1;s=0;ext=0]' #scipy.interpolate.UnivariateSpline
-
-
-# d=Parser_formula(a) #задаем через параметр a ссылку на базовые объект откуда будут извлекаться все параметры
+# d=Parser_formula() #задаем через параметр a ссылку на базовые объект откуда будут извлекаться все параметры
 # d.prepare_formula(test_formula) #задаем строку с формулой
 # b=Parser_formula(a) #задаем через параметр a ссылку на базовые объект откуда будут извлекаться все параметры
 # b.prepare_formula(test_formula4) #задаем строку с формулой
-c=Parser_formula(a)
-c.prepare_formula(test_formula4) #задаем строку с формулой
+# c=Parser_formula(a)
+# c.prepare_formula(test_formula4) #задаем строку с формулой
+e=Parser_formula()
+e.prepare_RHS_of_formula(test_formula6)
 
 # print(b.string_formula)
 # print(b.polish_formula)
@@ -532,13 +535,13 @@ c.prepare_formula(test_formula4) #задаем строку с формулой
 # print(c.polish_formula)
 # print(c.ARGUMENTS)
 # b.insert_values_in_arguments(x='pt.test')
-c.insert_values_in_arguments(z=1.999999999999999)
+# c.insert_values_in_arguments(z=1.999999999999999)
 # print(b.polish_formula)
 # print(b.ARGUMENTS)
 # print(c.polish_formula)
 # print(c.ARGUMENTS)
 # print(b.calculate()) #считаем формулу
-print(c.calculate())
+# print(c.calculate())
 
 """
 # класс ниже Parser используется в engine.py для считывания из файла модели строк, где прописывается какие параметры выводить в файл с результатами
