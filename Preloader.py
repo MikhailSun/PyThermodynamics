@@ -28,6 +28,7 @@ class Preloader():
     funcs = {}
 
     def __init__(self, fileName, initialData): #сюда передается имя файла с моделью, не input_data!!!
+        # prs.Parser_formula.BASE_LINK_TO_EXTRACT=base_link_for_parser
         text = open(fileName, 'r').readlines()
         initialData['Rezults']={}
         for t in text:
@@ -52,7 +53,7 @@ class Preloader():
                 #else:
                 #    self.preInitialData[a[0]] = float(a[1])
                 var_name = a[0].strip()
-                if self.currentSectionName in ['Parameters', 'Composition_of_inlet_gas', 'Secondary air system', 'Maps']:
+                if self.currentSectionName in [ 'Composition_of_inlet_gas', 'Secondary air system', 'Maps']: #'Parameters',
                     if (a[1].strip() in ['nan', 'np.nan', 'NaN']):
                         var_val = np.nan
                     else:
@@ -84,7 +85,11 @@ class Preloader():
                 #             else:
                 #                 print("ERROR") # what i am doing here
                 if self.currentSectionName == "Parameters":
-                    initialData[var_name] = var_val
+                    _obj=prs.Parser_formula()
+                    _obj.prepare_RHS_of_formula(a[1].split('#',1)[0].strip())
+                    if len(_obj.polish_formula)==1 and (_obj.polish_formula[0][0]=='bool' or _obj.polish_formula[0][0]=='num'):
+                        _obj=_obj.calculate()
+                    initialData[var_name] = _obj
                 if self.currentSectionName == "Composition_of_inlet_gas":
                     initialData[var_name] = np.array(var_val)
                 if self.currentSectionName == "Secondary air system":
@@ -131,20 +136,20 @@ class Preloader():
                     self.nodeTypes[res.group(2)] = res.group(1)
                 initialData["structure"] = self.nodeTypes
 
-    def get(self, val):
-        return self.preInitialData[val]
+    # def get(self, val):
+    #     return self.preInitialData[val]
 
     def getCompressorMap(self, name, data):
         solverLog.info('Compressor map of '+name+': '+self.preInitialData[name])
         data[f"{name}.G_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "compressor")['G_function']
         data[f"{name}.PR_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "compressor")['PR_function']
-        data[f"{name}.Eff_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "compressor")['Eff_function']
+        data[f"{name}.eff_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "compressor")['eff_function']
 
     def getTurbineMap(self, name, data):
         solverLog.info('Turbine map of '+name+': '+self.preInitialData[name])
         data[f"{name}.Capacity_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "turbine")['G_function']
         data[f"{name}.PR_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "turbine")['PR_function']
-        data[f"{name}.Eff_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "turbine")['Eff_function']
+        data[f"{name}.eff_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "turbine")['eff_function']
         data[f"{name}.A_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "turbine")['Alfa_function']
         data[f"{name}.L_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "turbine")['Lambda_function']
 

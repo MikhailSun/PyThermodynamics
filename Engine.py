@@ -60,7 +60,7 @@ from matplotlib import pyplot as plt
 import Preloader as pl
 import devices as dev
 import thermodynamics as td
-import Parser 
+import Parser
 #import thermodynamics_c_v1 as td
 
 now = datetime.datetime.now()
@@ -146,8 +146,12 @@ class Engine():
         self.initial_approaches=list()#список, где будут хранитсья первоначальные приближения, задаваемые пользоватлеем через input_data
         
         self.input_data_filename=''
-        model_filename=self.read_modes_from_input_data(filename_of_input_data) #имя файла input_data передавать необязательно, но если оно передано, то у него наивысший приоритет - именно из него будут взяты данные, если не задано, то дальше будут проверяться параметры в строке при запуске через cmd, если и там пусто, то файла будет искать автоматически в рабочей директории - см.метод read_input_data
+        model_filename=self.read_filename_of_model(filename_of_input_data)
+        Parser.Parser_formula.BASE_LINK_TO_EXTRACT = self
         pl.Preloader(model_filename, initial_data) #здесь идет предварительная обработка данных заданных пользователем через файл модели, не input_data!!!. Эти данные заносятся в массив initial_data, который подается на вход в initial_dat
+        self.read_modes_from_input_data() #имя файла input_data передавать необязательно, но если оно передано, то у него наивысший приоритет - именно из него будут взяты данные, если не задано, то дальше будут проверяться параметры в строке при запуске через cmd, если и там пусто, то файла будет искать автоматически в рабочей директории - см.метод read_input_data
+        # Parser.Parser_formula.BASE_LINK_TO_EXTRACT=self #задаем базовую ссылку на объект двигателя по которой нужно будет находить параметры в формулах
+
         self.rezults_data=initial_data['Rezults'] #здесь будут храниться данные о том, какие результаты выводить в конечный файл
         self.name_of_engine=initial_data['name']
 
@@ -157,6 +161,9 @@ class Engine():
         
         i = 0
         for name_of_device in initial_data["structure"]:
+            if name_of_device=='in':
+                solverLog.error(f'Error! Restricted name of device: {name_of_device}')
+                raise SystemExit
             #инициализируем объект узла двигателя
             device = getattr(dev, initial_data["structure"][name_of_device])(initial_data, self.ambient if i == 0 else device, self, name=name_of_device)
             #задаем этот объект узла кка один из параметров объекта двигателя
@@ -164,7 +171,17 @@ class Engine():
             i += 1
  
         self.secondary_air_system=dev.Secondary_Air_System(initial_data,self,name='SAS')
-        
+
+        # for val in initial_data.values(): #в этом цикле проверяем, чтобы у всех объектов Parser.Parser_formula не было в параметрах строчных данных - они должны быть преобразованф в ссылки
+        #     if isinstance(val,Parser.Parser_formula):
+        #         val.check_undefined_parameters_and_udf_arguments()
+        # for val in self.user_input_operating_modes: #в этом цикле проверяем, чтобы у всех объектов Parser.Parser_formula не было в параметрах строчных данных - они должны быть преобразованф в ссылки
+        #     for val2 in val.values():
+        #         if isinstance(val2,Parser.Parser_formula):
+        #             val2.check_undefined_parameters_and_udf_arguments()
+        # for val in Parser.Parser_formula.USER_DEFINED_FUNCTIONS.values():
+        #     val.check_undefined_parameters_and_udf_arguments()
+
         for key in self.arguments.keys(): #ищем в массиве arguments количество роторов
             rez=re.findall(r'^n\d{1,3}$',key) #это шаблон для поиска обозначения вала
             if rez:
@@ -183,18 +200,17 @@ class Engine():
             self.PR=np.nan
         if self.name_of_engine=='GTE-170':
             self.Ne=np.nan
-            def _func(T):
-                x_Th=[253.15,263.15,268.15,273.15,278.15,283.15,288.15,293.15,303.15,313.15]
-                y_Tturb_out=[808.17,809.7,811.1,812.77,815.0,817.17,819.9,823.0,830.17,838.77]
-                return np.poly1d(np.polyfit(x_Th,y_Tturb_out,2))
-    def law_of_Tout_turb_by_Th(self,T):
-        x_Th=[253.15,263.15,268.15,273.15,278.15,283.15,288.15,293.15,303.15,313.15]
-        y_Tturb_out=[808.17,809.7,811.1,812.77,815.0,817.17,819.9,823.0,830.17,838.77]
-        return np.poly1d(np.polyfit(x_Th,y_Tturb_out,2))(T)
+            # def _func(T):
+            #     x_Th=[253.15,263.15,268.15,273.15,278.15,283.15,288.15,293.15,303.15,313.15]
+            #     y_Tturb_out=[808.17,809.7,811.1,812.77,815.0,817.17,819.9,823.0,830.17,838.77]
+            #     return np.poly1d(np.polyfit(x_Th,y_Tturb_out,2))
+    # def law_of_Tout_turb_by_Th(self,T):
+    #     x_Th=[253.15,263.15,268.15,273.15,278.15,283.15,288.15,293.15,303.15,313.15]
+    #     y_Tturb_out=[808.17,809.7,811.1,812.77,815.0,817.17,819.9,823.0,830.17,838.77]
+    #     return np.poly1d(np.polyfit(x_Th,y_Tturb_out,2))(T)
 
     def calculate(self):
-                
-        # self.balance_of_power_of_rotor=dict.fromkeys(self.balance_of_power_of_rotor,0.0)        
+
         for name, device in self.devices.items():
             device.calculate(self)
         #дальше временный костыль - нужно убрать, см.тудушку 16
@@ -212,61 +228,76 @@ class Engine():
             self.Cr=(self.devices["cmbstr"].G_fuel)/(self.Thrust)
         if self.name_of_engine=='GTE-170':
             self.Ne=self.turb.N+self.compr.N
-        
-    def read_modes_from_input_data(self,input_filename):#чтение из внешнего файла, задаваемого пользователем, данных о необходимых для расчета режимов. Обычно это файл input_data.dat
+
+    def read_filename_of_model(self,input_filename):
         # current_dir=os.getcwd()
-        current_dir=pathlib.Path(__file__).parent.absolute()
+        current_dir = pathlib.Path(__file__).parent.absolute()
         # files=os.listdir(current_dir)
-        solverLog.info('Current working directory: '+str(current_dir))
+        solverLog.info('Current working directory: ' + str(current_dir))
         solverLog.info('Searching input data...')
-        
-        if len(input_filename)>0: #если имя файла передано вручную через параметр input_filename
+        if len(input_filename) > 0:  # если имя файла передано вручную через параметр input_filename
             solverLog.info('Using input data file from Python code')
-            if os.path.exists(input_filename): #тогда ищем файл по умолчанию
+            if os.path.exists(input_filename):  # тогда ищем файл по умолчанию
+                self.input_data_filename = input_filename
                 solverLog.info('Reading input data file: ' + input_filename)
             else:
-                solverLog.error('ERROR: Not found input data file from Python code: '+input_filename)
-                raise SystemExit                   
-        elif len(sys.argv)==1: #если в параметрах к файлу не переданы параметры, то попробуем найти файл сами в рабочей директории: для этого файл должен иметь формат .dat и внутри есбя иметь строку {model}
+                solverLog.error('ERROR: Not found input data file from Python code: ' + input_filename)
+                raise SystemExit
+        elif len(sys.argv) == 1:  # если в параметрах к файлу не переданы параметры, то попробуем найти файл сами в рабочей директории: для этого файл должен иметь формат .dat и внутри есбя иметь строку {model}
             solverLog.info('Finding input data file in working directory')
-            files=os.listdir(current_dir)
+            files = os.listdir(current_dir)
             for file in files:
-                if file.endswith('.dat') and 'model' not in file: #тогда ищем файл в рабочей директории. У файла д.б. расширение dat и название не должно включать в себя слово "model"
+                if file.endswith(
+                        '.dat') and 'model' not in file:  # тогда ищем файл в рабочей директории. У файла д.б. расширение dat и название не должно включать в себя слово "model"
                     with open(file) as _f:
                         for _line in _f:
                             # print(_line)
                             if ('{Model}' in _line) or ('{model}' in _line):
-                                input_filename=file
-                                self.input_data_filename=input_filename
-                                solverLog.info('It was found input data file: '+input_filename)
+                                self.input_data_filename = file
+                                solverLog.info('It was found input data file: ' + file)
                                 _f.close()
                                 break
-                        if len(input_filename)>0:
+                        if len(self.input_data_filename) > 0:
                             break
-            if input_filename=='':
+            if self.input_data_filename == '':
                 solverLog.error('ERROR: Not found input data file in working directory')
-                solverLog.info('Files in directory: '+str(files))
+                solverLog.info('Files in directory: ' + str(files))
                 raise SystemExit
 
-            
             # if os.path.exists('input_data.dat'):
             #     input_filename='input_data.dat'
             #     solverLog.info('Reading default file input_data.dat')
             # else:
             #     solverLog.error('ERROR: Not found default input_data.dat')
             #     raise SystemExit
-        else:#если в параметрах к файлу через командную строку передано чтото
-            _temp=sys.argv[1].split('=')
-            if _temp[0]=='input': #если передан параметр input, то в нем содржится имя файла с исходными данными
-                input_filename=_temp[1]
-                if not os.path.exists(input_filename):
-                    solverLog.error('ERROR: Not found input data file '+input_filename)
+        else:  # если в параметрах к файлу через командную строку передано чтото
+            _temp = sys.argv[1].split('=')
+            if _temp[0] == 'input':  # если передан параметр input, то в нем содржится имя файла с исходными данными
+                self.input_data_filename = _temp[1]
+                if not os.path.exists(self.input_data_filename):
+                    solverLog.error('ERROR: Not found input data file ' + self.input_data_filename)
                     raise SystemExit
                 else:
-                    solverLog.info('Reading input data file '+input_filename)
-        
+                    solverLog.info('Reading input data file ' + self.input_data_filename)
+
+        with open(self.input_data_filename) as _file: #загоняем всю информацию из файла с исходными данными в словарь user_input
+            calc_mode=False
+            for line in _file: #перебираем по очереди все строки
+                _temp=line.split('#') #если строка начинается с решетки, значит следом за ней комментарий, который мы отбрасываем
+                if ('{model}' in _temp or '{Model}' in _temp) and calc_mode==False:
+                    calc_mode = True
+                    continue
+                elif calc_mode==True:
+                    _temp = re.findall(r'\s*(.+)\s*', _temp[0])[0]
+                    if len(_temp)>0:
+                        filename_of_model = _temp
+                        solverLog.info('File of model: ' + filename_of_model)
+                        break
+        return filename_of_model
+
+    def read_modes_from_input_data(self):#чтение из внешнего файла, задаваемого пользователем, данных о необходимых для расчета режимов. Обычно это файл input_data.dat
         user_input = {}
-        with open(input_filename) as _file: #загоняем всю информацию из файла с исходными данными в словарь user_input
+        with open(self.input_data_filename) as _file: #загоняем всю информацию из файла с исходными данными в словарь user_input
             calc_mode=''
             for_log_main=[]
             for line in _file: #перебираем по очереди все строки
@@ -276,20 +307,18 @@ class Engine():
                     if _mode.group(1).strip()=='operating modes':
                         calc_mode='{operating modes}'
                         continue
-                    elif _mode.group(1).strip()=='model':
-                        calc_mode='{model_filename}'
-                        continue
                     else:
                         calc_mode=''
                 if calc_mode=='{operating modes}':
                     #сначала извлекаем из строки раздел внутри круглых скобок, в них содержатся значения первоначальных приближений
-                    _temp=re.findall(r'([^(){}]+)(?:\(|\{)*([^(){}]+)(?:\(|\{)*',_temp[0]) #в списке будут содержимое до скобок и второй элемент - содержимое внутри скобок
+                    _temp=re.findall(r'([^{}]+)(?:\{)*([^{}]+)(?:\{)*',_temp[0]) #в списке будут содержимое до скобок и второй элемент - содержимое внутри скобок
                     if not _temp:
                         continue
+
                     _initial_approach=re.findall(r'(?:\'|\")?(\w+)(?:\'|\")?\s*(?:=|:)\s*(\-?\d+\.?\d*)\s*',_temp[0][1])
                     # _parameters=re.findall(r'(\w+)\s*=\s*(\-?\d+\.?\d*)\s*([\w\%\/\*]*)',_temp[0][0]) #с помощью регулярок дербаним строку с параметрами режимов
-                    _parameters=re.findall(r'((?:(?:\w+\.{1})*\w+))\s*=\s*(\-?\d+\.?\d*)\s*([\w\%\/\*]*)',_temp[0][0]) #с помощью регулярок дербаним строку с параметрами режимов
-                    
+                    # _parameters=re.findall(r'((?:(?:\w+\.{1})*\w+))\s*=\s*(\-?\d+\.?\d*)\s*([\w\%\/\*]*)',_temp[0][0]) #с помощью регулярок дербаним строку с параметрами режимов
+                    _parameters=_temp[0][0].strip().split(';')
                     approach_dict=dict()
                     for approach in _initial_approach: #дербаним первоначальные приближения
                         name=approach[0]
@@ -299,26 +328,36 @@ class Engine():
 
                     user_input=dict()
                     for_log=dict()
-                    for parameter in _parameters: #дербаним параметры задающие режим работы двигателя
-                        self.unit_rezult=1
-                        self.unit_operation='*'
-                        name=parameter[0]
-                        value=float(parameter[1])
-                        unit=parameter[2]
-                        _temp=re.search(r'^\s*(?:C|С)\s*$',unit) #проверяем если исходные единицы измерения - градусы Цельсий, то это осбый случай (если  Цельсий стоит отдельно сам по себе это не то же самое, когда Цельсий находится в составе сложной единицы измерения с другими величинами)
-                        if _temp:
-                            user_input[name]=value*self.units[_temp.group(0)][0]+self.units[_temp.group(0)][1]                     
+                    for _parameter in _parameters: #дербаним параметры задающие режим работы двигателя
+                        if not _parameter:
+                            continue
+                        name,value=_parameter.strip().split('=',1)
+                        if 'residual' in name:
+                            name=name.strip()
+                            _obj = Parser.Parser_formula()
+                            _obj.prepare_RHS_of_formula(value.strip())
+                            user_input[name] =_obj
+                            for_log[name] = value.strip()
                         else:
-                            self.parser_for_units(unit)
-                            user_input[name]=value*self.unit_rezult
-                        for_log[name]=parameter[1]+parameter[2]
+                            rez=re.findall(r'([\d\.]+)(\w*)',value)[0]
+                            self.unit_rezult=1
+                            self.unit_operation='*'
+                            value=float(rez[0])
+                            unit=rez[1]
+                            _temp=re.search(r'^\s*(?:C|С)\s*$',unit) #проверяем если исходные единицы измерения - градусы Цельсий, то это осбый случай (если  Цельсий стоит отдельно сам по себе это не то же самое, когда Цельсий находится в составе сложной единицы измерения с другими величинами)
+                            if _temp:
+                                user_input[name]=value*self.units[_temp.group(0)][0]+self.units[_temp.group(0)][1]
+                            else:
+                                self.parser_for_units(unit)
+                                user_input[name]=value*self.unit_rezult
+                            for_log[name]=rez[0]+rez[1]
                     self.user_input_operating_modes.append(user_input)
                     for_log_main.append(for_log)
-                if calc_mode=='{model_filename}' and re.findall(r'\s*(.*)\s*',_temp[0])[0]:                    
-                    _temp=re.findall(r'\s*(.*)\s*',_temp[0])[0] #с помощью регулярок дербаним строку 
-                    if _temp!='':
-                        filename_of_model=_temp
-                        solverLog.info('File of model: '+filename_of_model)
+                # if calc_mode=='{model_filename}' and re.findall(r'\s*(.*)\s*',_temp[0])[0]:
+                #     _temp=re.findall(r'\s*(.*)\s*',_temp[0])[0] #с помощью регулярок дербаним строку
+                #     if _temp!='':
+                #         filename_of_model=_temp
+                #         solverLog.info('File of model: '+filename_of_model)
                         
             solverLog.info('Reading input data: ok')
 #        print(self.user_input_operating_modes)
@@ -326,7 +365,6 @@ class Engine():
         for n,_string in enumerate(for_log_main):
             log_text+=str(n)+') '+str(_string)+'\n'
         solverLog.info(log_text)
-        return filename_of_model
         
         
 #                    if calc_mode=='{identification}':  
@@ -526,6 +564,8 @@ class Engine():
                 self.variables[var_key]=0.95 #TODO! возможно стоит сделать так, чтобы рекомендуемые обороты лежали где-то по середине между минимальными и максимальнымии оборотами на характеристике компрессорау
             elif re.findall(r'^(.)*_*betta$',var_key): #приближение по параметру бетта для характеристик (обычно в диапазоне 0-1 в середине, если все работает как надо)
                 self.variables[var_key]=0.5
+            elif re.findall(r'^(.)*_*angle$',var_key): #приближение по параметру угла для характеристик, тут неочевидно TODO! возможно стоит пересмотреть алгоритм оценки альфа
+                self.variables[var_key]=0.0
             elif re.findall(r'^(.)*_*Gf$',var_key): #приближение по параметру относительного расхода топлива. Величина может колебаться от 0 (нет топлива) до 1 (примерно стехиометрия). Обычно на двигателя средняя альфа в КС колеблется в диапазоне от 2-3 до 5-8. Возьмем среднюю 5, ей соответствует параметр = (1/альфа) = 0,2
                 self.variables[var_key]=0.2                
         for var_key,var_value in self.variables.items():   #приближение по расходам сделано в отдельном цикле, потому что они могут зависеть от других приближений, задаваемых в предыдущем цикле выше       
@@ -541,12 +581,15 @@ class Engine():
                     elif name in self.arguments and not self.arguments[name] is np.nan:
                         _n_corr_temp=self.arguments[name]
                     
-                    _betta_temp=self.variables[self.named_main_devices['first_compressor'].name+'_betta']
-                    #TODO!!! костыль! убрать!
-                    if self.name_of_engine=='GTE-170':
-                        _angle_temp=self.variables[self.named_main_devices['first_compressor'].name+'_angle']
+                    _betta_temp=self.variables[self.named_main_devices['first_compressor'].name+'.betta']
+
+                    if hasattr(self.named_main_devices['first_compressor'],'angle'):
+                        if hasattr(self.variables,self.named_main_devices['first_compressor'].name+'.angle'):
+                            _angle_temp=self.variables[self.named_main_devices['first_compressor'].name+'.angle']
+                        else:
+                            _angle_temp = self.arguments[self.named_main_devices['first_compressor'].name + '.angle']
                         self.variables[var_key]=float(self.named_main_devices['first_compressor'].G_map(_n_corr_temp,_betta_temp,_angle_temp))
-                    #/TODO!!! костыль! убрать!
+
                     else:
                         self.variables[var_key]=float(self.named_main_devices['first_compressor'].G_map(_n_corr_temp,_betta_temp))
             elif re.findall(r'^Gref$',var_key): #приближение по параметру ссылочного расхода воздуха относительно которого задаются расходы охлаждающего воздуха
@@ -567,34 +610,24 @@ class Engine():
         #     for rotor in list(self.balance_of_power_of_rotor):
         #         self.residuals['dN_'+rotor]=self.balance_of_power_of_rotor[rotor]/self.named_main_devices['first_turbine'].N #NB! здесь в знаменателе мощность первой турбины, что в общем не обязательно. Первая турбина выбрана, потому, что она есть всегда и обычно она самая мощная, относительно нее удобно переводить величины в относительный вид
         for rotor in list(self.balance_of_power_of_rotor):
-            self.residuals['dN_'+rotor]=self.balance_of_power_of_rotor[rotor]/self.named_main_devices['first_turbine'].N #NB! здесь в знаменателе мощность первой турбины, что в общем не обязательно. Первая турбина выбрана, потому, что она есть всегда и обычно она самая мощная, относительно нее удобно переводить величины в относительный вид
+            self.residuals['dN.'+rotor]=self.balance_of_power_of_rotor[rotor]/self.named_main_devices['first_turbine'].N #NB! здесь в знаменателе мощность первой турбины, что в общем не обязательно. Первая турбина выбрана, потому, что она есть всегда и обычно она самая мощная, относительно нее удобно переводить величины в относительный вид
             
 
 
-        #далее просматриваем массив исходных данных заданных пользователем self.operating_mode и ищем там ключ, который задает еще одну невязку характеризующую режим работы двигателя (это ключ, который отсутствует в словаре self.arguments)
+        #далее просматриваем массив исходных данных заданных пользователем self.operating_mode и ищем там ключ(и), который задает еще одну невязку характеризующую режим работы двигателя (это ключ, который отсутствует в словаре self.arguments
         for key in self.operating_mode:
-            if key not in self.arguments:
+            if 'residual' in key:
+                self.residuals[key]=self.operating_mode[key].calculate()
+            elif key not in self.arguments:
                 if self.operating_mode[key]==0:
                     solverLog.error('Ошибка!!! параметр {parameter} равен нулю, а относительного него считается неявзка - это фиаско, братан! По идее таких параметров не должно быть. Обращайтесь к разработчику'.format(parameter=self.operating_mode[key]))
                 if self.named_main_devices['last_turbine'].name+'.N'==key:
                     _rotor=self.named_main_devices['last_turbine'].name_of_n
                     _N=self.operating_mode[key]
-                    self.residuals['dN_'+_rotor]=(self.balance_of_power_of_rotor[_rotor]-_N)/self.named_main_devices['first_turbine'].N
+                    self.residuals['dN.'+_rotor]=(self.balance_of_power_of_rotor[_rotor]-_N)/self.named_main_devices['first_turbine'].N
                 else:
                     self.residuals[key]=(self.operating_mode[key] - self.str2parameter(key) )/self.operating_mode[key]
-        
-        #TODO!!! Временный костыль!!! убоать!
-        if self.name_of_engine=='GTE-170':
-            _angle=self.variables['compr_angle']
-            if _angle<=-30.0:
-                self.residuals['compr_angle_error']=(_angle+30.0)/30
-            elif _angle>=3.0:
-                self.residuals['compr_angle_error']=(_angle-3.0)/-3
-            else:
-                _T=self.law_of_Tout_turb_by_Th(self.arguments['Th'])
-                self.residuals['compr_angle_error']=(_T-self.devices['turb'].outlet.T)/_T
 
-        #TODO!!! Временный костыль!!! убоать!
                 
         
 #        self.named_main_devices['last_turbine_rotor']
@@ -608,6 +641,7 @@ class Engine():
         
         self.arguments.update(self.variables)
         not_calculated_model=copy.deepcopy(self)
+        Parser.Parser_formula.BASE_LINK_TO_EXTRACT=not_calculated_model
         try:
             not_calculated_model.calculate()
         except:
@@ -616,6 +650,9 @@ class Engine():
 #        print(self.hpc.N)
 #        print(self.hpt.N)
         not_calculated_model.set_residuals_for_static_operating_mode() #TODO! есть баг: после успешного расчета когда зеначения варьируемых параметров уже известны и проводится контрольный расчет с этими варьируемыми параметрами на основе базовой "чистой"/исходной модели, то внутрь этой "чистой" модели не попадают те невязки в массив residuals, которые рассчитываются  вэтой функции. Возможное решение - внести эту функцию внутрь calculate
+        if len(self.variables)!=len(not_calculated_model.residuals):
+            solverLog.warning(f'Warning: lenght of variables array not equivalent to residuals array: \n Variables:{self.variables} \n Residuals: {not_calculated_model.residuals}')
+            # raise SystemExit
         self.monitors=self.monitors.append(not_calculated_model.extract_values_for_monitors(),ignore_index=True)
         self.residuals_statistics=self.residuals_statistics.append(not_calculated_model.residuals,ignore_index=True)
         self.variables_statistics=self.variables_statistics.append(self.variables,ignore_index=True)
@@ -646,11 +683,11 @@ class Engine():
     
     
     def solve_modes(self): #решение для стаицонарного режима работы двигателя
-        solverLog.info('Initializating...')
+        # solverLog.info('Initializating...')
 #        self.read_input_data()
 #        self.prepare_input_data() #тут формируем список self.user_input_operating_modes, в котором каждый элемент - это словарь с параметрами, определяющими режим работы двигателя
         rezults=list() #здесь будут хранитсья результаты расчета, т.е. экземпляоы класса Engine с посчитанными режимами
-        solverLog.info('Initializating: ok')
+        # solverLog.info('Initializating: ok')
         self.time_before_start=datetime.datetime.now()
         solverLog.info('Solving...')
         entire_status=[] #будем тут хранить среднюю величину невязок по всем расчетным режимам
@@ -660,12 +697,13 @@ class Engine():
             solverLog.info('Mode '+str(number_of_mode)+str(': start of solving...'))
             self.time_before_mode_start=datetime.datetime.now()
             self.prepare_arguments_and_variables() #тут заполняем словарь arguments и формируем словарь variables (но пока не заполняем)
-           
-            #тут заполняем словарь variables первоначальными переменными
-            
-            self.estimate_variables(self.initial_approaches[number_of_mode])
+            self.estimate_variables(self.initial_approaches[number_of_mode])#тут заполняем словарь variables первоначальными переменными
             solverLog.info('Initial variables: '+str(self.variables))
             solverLog.info('Initial arguments: '+str(self.arguments))
+            for key,val in self.variables.items():
+                if np.isnan(val):
+                    solverLog.error(f'Error: undefined variable "{key}" in variables array: {self.variables}')
+                    raise SystemExit
             stability_factor=100 #значение 100 указано по умолчанию в описании функции root scipy https://docs.scipy.org/doc/scipy/reference/optimize.root-lm.html#optimize-root-lm уменьшение значение увеличивает время расчета, но делает расчет более стабильным!
             variables0=copy.copy(self.variables)
             while stability_factor>0.01: #если продолжит что-то разваливаться, то возможно стоит уменьшить значение слева
@@ -694,7 +732,7 @@ class Engine():
 #            print(rez['fun'])
 #            print(rez['qtf'])
 #        self=copy.deepcopy(model_to_save_rezults)#последний расчет сохраняем в текущий объект
-        if all(entire_status)<0.000001:
+        if all(val<0.00001 for val in entire_status):
             solverLog.info('Solving status: Full success')
 #            print('Solving status: Full success')
         else:
@@ -992,7 +1030,7 @@ class Engine():
             for name,formula_and_dimension in self.rezults_data.items():
                 _name=name
                 _dimension=formula_and_dimension[1]
-                _formula=formula_and_dimension[0]
+                _formula=formula_and_dimension[0] #TODO!!! ввести проверку на то, что формула вычисляема! иначе прога вылетает, а в логах не пишется почему
                 _values=[]
                 for rezult in rezults_data:
                     p = Parser.Parser(rezult)

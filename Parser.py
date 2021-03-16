@@ -5,7 +5,7 @@ Created on Fri Mar  6 10:55:11 2020
 @author: Sundukov
 """
 #TODO! сделать штуку, которая перед расчетом генерит графики всех пользовательских функций, чтобы оценить их адекватность
-# import ast
+import ast
 import numpy as np
 import logging
 import re
@@ -52,12 +52,15 @@ class Parser_formula():
                   }
     #тут будут храниться функции, задаваемые пользователем
     USER_DEFINED_FUNCTIONS={}
-    #возможные типы данных, которые может парсить этот парсер: число, пользовательская функция, стандартная функция, математический оператор, аругмент пользовательской функции, параметр объекта, скобки
-    POSSIBLE_TYPES=frozenset(['num','udf','udf_points','st_fun','op','arg','par','br'])
+    #возможные типы данных, которые может парсить этот парсер: число, пользовательская функция, стандартная функция, математический оператор, аругмент пользовательской функции, параметр объекта, скобки, строка (под строкой подразумевается промежуточный тип данных, т.е. он хранит информацию на объект, откуда нужно будет взять данные, но этого объекта на момент создания строки еще нет, поэтому эту строку нельзя преобразовать в ссылку на объект)
+    POSSIBLE_TYPES=frozenset(['num','udf','udf_points','st_fun','op','arg','par','br','bool','str'])
     BASE_LINK_TO_EXTRACT=None
 
-    def __init__(self,link_to_extract=BASE_LINK_TO_EXTRACT):
-        self.base_link_to_extract=link_to_extract #тут будет хранитсья ссылка на базовые объект, отоносительно котрого будут задаваться параметры
+    def __init__(self,link_to_extract=None):
+        if link_to_extract == None:
+            self.base_link_to_extract = Parser_formula.BASE_LINK_TO_EXTRACT
+        else:
+            self.base_link_to_extract = link_to_extract
         self.name_of_function=np.nan #тут будем хранить имя функции
         self.string_formula=np.nan #текстовая формула в человеческом виде
         if self.base_link_to_extract==False:
@@ -73,7 +76,9 @@ class Parser_formula():
                         'op': self.calc_op,
                         'arg': self.calc_arg,
                         'par': self.calc_par,
-                        'udf_points':self.calc_udf_points}
+                        'udf_points':self.calc_udf_points,
+                        'bool':self.calc_bool,
+                        'str':self.calc_str,}
 
     #здесь заранее подготавливаем формулу в виде массива, где какие-то переменные на момент подготовки массива могут быть неизвестны, они будут известны потом в процессе расчета, на момент подготовки на эти переменные должны быть сохранены ссылки
     def prepare_formula(self, formula_string): #этот метод вызывается в разделе формул, которые определяется пользователь вида F(x,y,...)=x+y+... В методе разбирается только часть левее знака равно, и вызывается отдельный метод для разбора правой части уравнения
@@ -88,6 +93,10 @@ class Parser_formula():
         self.string_formula = RHS
         self.prepare_RHS_of_formula(RHS)
         return {self.name_of_function:self} #и возвращаем наружу на всякий случай
+
+    def prepare_RHS_of_formula(self,RHS):#этот метод вызывается в разделе, где формулы задаются для параметров, т.е. у формул нет имени и аргументов
+        self.shunting_yard(self.parse_string_to_generator(RHS)) #сохраняем формулу в виде польской нотации в self.polish_formula
+
     #Генератор, получает на вход строку, возвращает числа в формате float, операторы и скобки в формате символов или ссылки/параметры в виде текстовой строки.
     def parse_string_to_generator(self, formula_string):
         digit = '' #в этой переменной будем собирать число, если эта переменная не пустая, то сейчас число находится в процессе сборки
@@ -145,9 +154,9 @@ class Parser_formula():
                     elif string_parameter in Parser_formula.USER_DEFINED_FUNCTIONS:
                         udf=string_parameter
                         string_parameter=''
-                    elif self.check_exist_parameter_in_obj(string_parameter) and string_parameter in self.ARGUMENTS.keys():
-                        solverLog.error(f'Error: formula {self.name_of_function} = {self.string_formula} has duplicated string {string_parameter} in arguments of formula and in parameters of object {self.base_link_to_extract}')
-                        raise SystemExit
+                    # elif self.check_exist_parameter_in_obj(string_parameter) and string_parameter in self.ARGUMENTS.keys():
+                    #     solverLog.error(f'Error: formula {self.name_of_function} = {self.string_formula} has duplicated string {string_parameter} in arguments of formula and in parameters of object {self.base_link_to_extract}')
+                    #     raise SystemExit
                     elif self.check_exist_parameter_in_obj(string_parameter):
                         yield 'par',string_parameter
                         string_parameter = ''
@@ -155,25 +164,25 @@ class Parser_formula():
                         yield 'arg',string_parameter
                         string_parameter=''
                     else:
-                        # yield 'unknown_object',string_parameter
-                        # string_parameter = ''
-                        solverLog.error(f"Error: formula {self.name_of_function} = {self.string_formula} has unknown object '{string_parameter}'")
-                        raise SystemExit
+                        yield 'str',string_parameter
+                        string_parameter = ''
+                        # solverLog.error(f"Error: formula {self.name_of_function} = {self.string_formula} has unknown object '{string_parameter}'")
+                        # raise SystemExit
                 elif string_parameter and not udf and (s in '+-*/^=<>!_?:&|)'):
-                    if self.check_exist_parameter_in_obj(string_parameter) and string_parameter in self.ARGUMENTS.keys():
-                        solverLog.error(f'Error: formula {self.name_of_function} = {self.string_formula} has duplicated string {string_parameter} in arguments of formula and in parameters of object {self.base_link_to_extract}')
-                        raise SystemExit
-                    elif self.check_exist_parameter_in_obj(string_parameter):
+                    # if self.check_exist_parameter_in_obj(string_parameter) and string_parameter in self.ARGUMENTS.keys():
+                    #     solverLog.error(f'Error: formula {self.name_of_function} = {self.string_formula} has duplicated string {string_parameter} in arguments of formula and in parameters of object {self.base_link_to_extract}')
+                    #     raise SystemExit
+                    if self.check_exist_parameter_in_obj(string_parameter):
                         yield 'par',string_parameter
                         string_parameter = ''
                     elif string_parameter in self.ARGUMENTS.keys():
                         yield 'arg',string_parameter
                         string_parameter=''
                     else:
-                        # yield 'unknown_object', string_parameter
-                        # string_parameter = ''
-                        solverLog.error(f"Error: formula {self.name_of_function} = {self.string_formula} has unknown object '{string_parameter}'")
-                        raise SystemExit
+                        yield 'str', string_parameter
+                        string_parameter = ''
+                        # solverLog.error(f"Error: formula {self.name_of_function} = {self.string_formula} has unknown object '{string_parameter}'")
+                        # raise SystemExit
 
 
                 #3) собираем пользовательскую формулу в виде function(x=...,y=...,...)
@@ -194,7 +203,7 @@ class Parser_formula():
 
             #4) собираем оператор
             if s in "+-*/^=<>!()?:&|" and not function_thru_points:
-                if s=='-' and (last_s =='' or last_s in Parser_formula.OPERATORS or last_s == "("):
+                if s=='-' and (last_s =='' or last_s in Parser_formula.OPERATORS or last_s in "(="):
                     s='-unary'
                     yield 'op',s
                     last_s=s
@@ -230,16 +239,21 @@ class Parser_formula():
         if string_parameter:
             if string_parameter in Parser_formula.USER_DEFINED_FUNCTIONS:
                 yield 'udf',string_parameter
-            elif self.check_exist_parameter_in_obj(string_parameter) and string_parameter in self.ARGUMENTS.keys():
-                solverLog.error(f'Error: formula {self.name_of_function} = {self.string_formula} has duplicated string {string_parameter} in arguments of formula and in parameters of object {self.base_link_to_extract}')
-                raise SystemExit
+            # elif self.check_exist_parameter_in_obj(string_parameter) and string_parameter in self.ARGUMENTS.keys():
+            #     solverLog.error(f'Error: formula {self.name_of_function} = {self.string_formula} has duplicated string {string_parameter} in arguments of formula and in parameters of object {self.base_link_to_extract}')
+            #     raise SystemExit
             elif self.check_exist_parameter_in_obj(string_parameter):
                 yield 'par', string_parameter
             elif string_parameter in self.ARGUMENTS.keys():
                 yield 'arg', string_parameter
+            elif string_parameter=='True':
+                yield 'bool',True
+            elif string_parameter=='False':
+                yield 'bool',False
             else:
-                solverLog.error(f"Error: formula {self.string_formula} has unknown object '{string_parameter}'")
-                raise SystemExit
+                yield 'str', string_parameter
+                # solverLog.error(f"Error: formula {self.string_formula} has unknown object '{string_parameter}'")
+                # raise SystemExit
         if udf:
             yield 'udf', udf
         if function_thru_points:
@@ -341,30 +355,62 @@ class Parser_formula():
 
         while stack:
             self.polish_formula.append(stack.pop())
-        self.polish_formula=tuple(self.polish_formula)
+        # self.polish_formula=tuple(self.polish_formula)
         for token in self.polish_formula:
             if token[0] not in Parser_formula.POSSIBLE_TYPES:
                 solverLog.error(f"Error: Parser_formula: unknown type of token {token[1]} in formula {self.string_formula}")
                 raise SystemExit
 
+    #иногда существует проблема, что после того, как сгенерирована польская нотация, то в ней есть либо не до конца распозанный параметр (например, ('str', 'compr.inlet.G')), либо не до конца распознанный аргумент функции ('udf', ('inlet_sigma', {'x': 'inlet.G_corr'})). Это происходит из-за того, что на момент парсенья формулы объекты, на которые ссылаются формулы, еще могут не сущестсвовать.
+    #Для устранения этой проблемы данный метод проверяет объект Parser_formula. Если в нем есть нераспознынный объект - пытается распознать его и превратить в ссылку на объект вида
+    def check_undefined_parameters_and_udf_arguments(self):
+        _new_polish_formula=[]
+        for token in self.polish_formula:
+            if token[0]=='str':
+                _token=self.str2link(token[1])
+                if isinstance(_token,tuple):
+                    token=('par',_token)
+                    _new_polish_formula.append(token)
+                else:
+                    solverLog.error(f"Error: Parser_formula: undefined token {token} in formula {self.string_formula}")
+                    raise SystemExit
+            elif token[0]=='udf':
+                _dict=token[1][1]
+                for key,val in _dict.items():
+                    if isinstance(val,str):
+                        _token=self.str2link(val)
+                        if isinstance(_token, tuple):
+                            token[1][1][key]=_token
+                        else:
+                            solverLog.error(f"Error: Parser_formula: undefined parameter {val} in user defined formula {token[1][0]}")
+                            raise SystemExit
+                _new_polish_formula.append(token)
+            else:
+                _new_polish_formula.append(token)
+        self.polish_formula=_new_polish_formula
+
+    ('str', 'compr.inlet.G')
+    ('udf', ('inlet_sigma', {'x': 'inlet.G_corr'}))
+
+
+
     # вспомогательная функция для преобразования строки, содержащей ссылку на параметр в tuple, где первое значение хранит указатель на объект, а второе значение - имя параметры этого объекта, значение которого нужно узнать. Так странно сделано из-за того, что в питоне есть mutable и immutable переменные
     # если скормить строку, в которой число - вернет float, если скормить tuple со ссылкой - попытаестя его вычислить
     def str2link(self,string):
-        if isinstance(string,tuple):
+        if isinstance(string,tuple): #если кортеж - в нем ссылка на параметр - возвращаем число
             return self.calc_par(string)
-        elif self.is_number(string):
+        elif self.is_number(string): #если в строке число в текстовом виде, то переводим ее во float
             return float(string)
-        elif string in self.ARGUMENTS.keys():
+        elif string in self.ARGUMENTS.keys(): #если в строке имя аргумента к функции, то возвращаем значение этого аргумента из массива self.ARGUMENTS
             # есть проблема с такой штукой: 1) есть функ1(x,y)=x+y 2) есть функ2(z)=функ1(х=2y=z) 3) проблема в том, что при попытке присвоить аргументу функ1 значение аргумента z функ2 непонятно как передать ссылка на z
             return self.ARGUMENTS[string]
-        else:
-            rez=self.base_link_to_extract
+        elif self.check_exist_parameter_in_obj(string):
+            rez=Parser_formula.BASE_LINK_TO_EXTRACT
             broken_string = string.split('.')
             for val in broken_string[:-1]:
-                if hasattr(rez,val):
-                    rez=getattr(rez,val)
-                else:
-                    return 'unknown parameter '+string
+                rez=getattr(rez,val)
+        else:
+            return string
         return (rez,broken_string[-1])
 
     def is_number(self,s):
@@ -375,7 +421,7 @@ class Parser_formula():
             return False
 
     def check_exist_parameter_in_obj(self,string):
-        rez=self.base_link_to_extract
+        rez=Parser_formula.BASE_LINK_TO_EXTRACT
         broken_string = string.split('.')
         for val in broken_string:
             if hasattr(rez,val):
@@ -396,21 +442,29 @@ class Parser_formula():
             self.temp_stack_for_calculation.append(self.CALC_METHODS[token[0]](token[1]))
         return self.temp_stack_for_calculation[0] # результат вычисления - единственный элемент в стеке
 
-    def prepare_RHS_of_formula(self,RHS):#этот метод вызывается в разделе, где формулы задаются для параметров, т.е. у формул нет имени и аргументов
-        self.shunting_yard(self.parse_string_to_generator(RHS)) #сохраняем формулу в виде польской нотации в self.polish_formula
 
     def insert_values_in_arguments(self,**dict_of_values):
         for arg,value in dict_of_values.items():
             if arg in self.ARGUMENTS.keys():
-                self.ARGUMENTS[arg].itemset(self.str2link(value))
+                temp_val=self.str2link(value)
+                if isinstance(temp_val,str):
+                    self.ARGUMENTS[arg].itemset(self.calc_par(value))
+                else:
+                    self.ARGUMENTS[arg].itemset(self.str2link(temp_val))
             else:
                 solverLog.error(f'ERROR: unknown name of argument {arg} in attempt to insert value {value} in formula {self.name_of_function} = {self.string_formula}')
 
     def calc_numb(self,number):
         return number
 
+    def calc_bool(self,bool):
+        return bool
+
     def calc_udf(self,name_and_args):
+        # print(self.string_formula)
+        # print(Parser_formula.BASE_LINK_TO_EXTRACT)
         udf=Parser_formula.USER_DEFINED_FUNCTIONS[name_and_args[0]]
+        # print(f'calc_udf: {name_and_args}')
         udf.insert_values_in_arguments(**name_and_args[1])
         rez= udf.calculate()
         for key in udf.ARGUMENTS.keys():
@@ -418,7 +472,9 @@ class Parser_formula():
         return rez
 
     def calc_udf_points(self,function):
-        return function[0](**self.ARGUMENTS)
+        # print(self.string_formula)
+        # print(Parser_formula.BASE_LINK_TO_EXTRACT)
+        return function[0](tuple(self.ARGUMENTS.values())[0])  #govnokod
 
     def calc_st_fun(self,function):
         # if function == 'if':
@@ -434,12 +490,20 @@ class Parser_formula():
         return self.str2link(self.ARGUMENTS[argument])
 
     def calc_par(self,parameter):
-        val = float(getattr(parameter[0], parameter[1]))
-        if np.isnan(val):
-            solverLog.error('Error: Undefined parameter ' + parameter[1] + ' = ' + str(val) + ' in function "' + self.string_formula + '"')
-            raise SystemExit
-        return val
+        if isinstance(parameter,str):
+            rez=Parser_formula.BASE_LINK_TO_EXTRACT
+            broken_string = parameter.split('.')
+            for val in broken_string:
+                rez=getattr(rez,val)
+        else:
+            rez = float(getattr(parameter[0], parameter[1]))
+            if np.isnan(rez):
+                solverLog.error(f'Error: Undefined parameter {parameter[1]}. Name of function: {self.name_of_function}, formula: {self.string_formula}')
+                raise SystemExit
+        return rez
 
+    def calc_str(self,string):
+        return self.calc_par(string)
 
         # if isinstance(token, float):
         #     stack.append(token)
@@ -491,7 +555,7 @@ class Parser_formula():
 #     def __init__(self):
 #         self.devices = dict()
 #         self.air_bleed_out = [{'G_abs_from': 3}, 2, 3]
-#
+# #
 # class test2():
 #     def __init__(self):
 #         self.N = np.nan
@@ -517,7 +581,8 @@ class Parser_formula():
 # test_formula4='test_function(z)=2>1?2>3:3<2'
 # test_formula3='test_func()=1-pt.N-(-pt.N_offtake*-cos(1+0.57))/(pt.Eff_mech_value+300+ln(20))/1000+x/y+test_function(z=1)'
 # test_formula5='func_points(x)=[x=1,2,3,4;y=2.5,3,3.1,2.5;k=1;s=0;ext=0]' #scipy.interpolate.UnivariateSpline
-test_formula6='2'
+# test_formula6='pt.N'
+# test_formula7='True'
 
 # d=Parser_formula() #задаем через параметр a ссылку на базовые объект откуда будут извлекаться все параметры
 # d.prepare_formula(test_formula) #задаем строку с формулой
@@ -525,10 +590,10 @@ test_formula6='2'
 # b.prepare_formula(test_formula4) #задаем строку с формулой
 # c=Parser_formula(a)
 # c.prepare_formula(test_formula4) #задаем строку с формулой
-e=Parser_formula()
-e.prepare_RHS_of_formula(test_formula6)
-
-# print(b.string_formula)
+# e=Parser_formula(a)
+# e.prepare_RHS_of_formula(test_formula7)
+# e.calculate()
+# print(b.string_formula)unknown type of token
 # print(b.polish_formula)
 # print(b.ARGUMENTS)
 # print(c.string_formula)
@@ -543,7 +608,7 @@ e.prepare_RHS_of_formula(test_formula6)
 # print(b.calculate()) #считаем формулу
 # print(c.calculate())
 
-"""
+
 # класс ниже Parser используется в engine.py для считывания из файла модели строк, где прописывается какие параметры выводить в файл с результатами
 # этот класс используется стандартную питоновскую юиюлиотеку ast с сиснтаксическим деревом. Предположительно из-за этого он довольно медленный, поэтому его нельзя использовать в циклах. Для однократного вывода результатов в файл - годится.
 class Parser(ast.NodeVisitor):
@@ -711,7 +776,7 @@ class Parser(ast.NodeVisitor):
 
     # def visit_Attribute(self, node):
 
-
+"""
 class test1():
     def __init__(self):
         self.devices = dict()
