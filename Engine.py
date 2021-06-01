@@ -572,19 +572,20 @@ class Engine():
             if re.findall(r'^Gin$',var_key):
                 if var_key in variables_estimates: #Сначала проверяем наличие в массиве variables_estimate
                     self.variables[var_key]=variables_estimates[var_key]
-                elif self.solvecontrol_use_variables_from_previus_iteration_as_first_estimate==True and not var_value is np.nan:
+                elif self.solvecontrol_use_variables_from_previus_iteration_as_first_estimate==True and not np.isnan(var_value):
                     continue
                 else:#приближение по параметру расхода воздуха на входе в двигатель. Величина может колебаться в неограниченных пределах, можно примерно ее оценить из характеристики первого компрессора                 
                     name='n'+self.named_main_devices['first_compressor_rotor']
                     if name in self.variables:
                         _n_corr_temp=self.variables[name]
-                    elif name in self.arguments and not self.arguments[name] is np.nan:
+                    elif name in self.arguments and not np.isnan(self.arguments[name]):
                         _n_corr_temp=self.arguments[name]
                     
                     _betta_temp=self.variables[self.named_main_devices['first_compressor'].name+'.betta']
 
                     if hasattr(self.named_main_devices['first_compressor'],'angle'):
-                        if hasattr(self.variables,self.named_main_devices['first_compressor'].name+'.angle'):
+                        if self.named_main_devices['first_compressor'].name+'.angle' in self.variables:
+                        # if hasattr(self.variables,self.named_main_devices['first_compressor'].name+'.angle'):
                             _angle_temp=self.variables[self.named_main_devices['first_compressor'].name+'.angle']
                         else:
                             _angle_temp = self.arguments[self.named_main_devices['first_compressor'].name + '.angle']
