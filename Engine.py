@@ -15,7 +15,7 @@ Created on Fri Mar 29 19:48:31 2019
 8+) автоматизировать генерацию схемы, т.е. чтобы внутри методов __init__ и calculate не нужно было прописывать вручную порядок следования узлов. Схема двигателя должна задаваться польтзователем через файл
 9) сгенерировать детальную эксель-таблицу с результатами
 10) сделать варьируемую переменную расхода воздуха на входе в относительном виде, где 1 = расход на 100% при бетта = 0,5. Так будет удобнее на финальном графике с невязками
-11) сделать возможность пользователю через файл описания модели добавлять расчет производных параметров, которые не вычисляются по умолчанию, чтобы потом их можно было например выводить в результатах
+11) +сделать возможность пользователю через файл описания модели добавлять расчет производных параметров, которые не вычисляются по умолчанию, чтобы потом их можно было например выводить в результатах
 12) идея для парсера единиц измерения: он должен иметь две функции in('12unit/unit*unit^unit')=число_в_системем_СИ; out(число_в_СИ,'unit')='число_единицах_unit'
 13) сделать вывод в лог перед расчетом полной распечатки всех исходных данных модели
 14) в процессе решения невязок ввести проверку чтобывсе невязки и варьируемык переменные были вещественными числами
@@ -34,6 +34,7 @@ Created on Fri Mar 29 19:48:31 2019
 27) сделать переключатель в методке КС: чтобы химия считалась автоматом на основе таблиц НАСА, либо вручную по заданным свойствам L, теплотворной способности и и.т.
 28) проверить возможный баг: если задать режим для тв7 перепадом на тк и приведенными оборотами - он хоть и не сходится, но считается, хотя вроде н едолжен, т.к. переопределен
 29) сделать параметрик стади через человечейчий интерфейс
+30) ГЛОБАЛЬНОЕ ТУДУ: нужно переделать процесс расчета: а) в девайсах внедрить объекты crosssection из обновленного класса термодинамики б) в методе equation_to_solve нужно избавиться от метода deepcopy
     
 """
 
@@ -52,7 +53,7 @@ import os
 import pathlib
 import re
 import datetime
-from scipy.optimize import root 
+from scipy.optimize import root
 #from scipy.optimize import fsolve
 from scipy.interpolate import interp1d
 from matplotlib import pyplot as plt
@@ -72,68 +73,75 @@ date_text=now.strftime("date:%Y.%m.%d, time:%H:%M")
 #solverLog.info(date_text)
 
 class Engine():
+    # перечисление возможных единиц измерения
+    units = {'m': (1, 0),
+                  'mm': (0.001, 0),
+                  'cm': (0.01, 0),
+                  'dm': (0.1, 0),
+                  'm': (1, 0),
+                  'km': (1000, 0),
+                  'ft': (0.3048, 0),
+                  'in': (0.0254, 0),
+                  'Pa': (1, 0),
+                  'kPa': (1000, 0),
+                  'MPa': (1000000, 0),
+                  'gr': (0.001, 0),
+                  'g': (0.001, 0),
+                  'kg': (1, 0),
+                  't': (1000, 0),
+                  's': (1, 0),
+                  'sec': (1, 0),
+                  'min': (60, 0),
+                  'h': (3600, 0),
+                  'hr': (3600, 0),
+                  'C': (1, 273.15),
+                  'С': (1, 273.15),  # кириллицей
+                  'K': (1, 0),
+                  'rev': (2 * np.pi, 0),
+                  'ob': (2 * np.pi, 0),
+                  '1': (2 * np.pi, 0),
+                  'W': (1, 0),
+                  'kW': (1000, 0),
+                  'MW': (1000000, 0),
+                  'hp': (735.49875, 0),  # метрическая лошадиная сила
+                  'hp_mechanical': (745.69987158227022, 0),
+                  # британская/механическая лошадиная сила (ее используют у нас редко, но возможно использование в Британии, США, Канаде...)
+                  '%': (0.01, 0),
+                  'N': (1, 0),
+                  'kN': (1000, 0),
+                  'MN': (1000, 0),
+                  'kgf': (9.80665, 0),
+                  '': (1, 0),
+                  '-': (1, 0)}
+
+    initial_data = dict()  # словарь где будут храниться исходные данные
+    residuals_statistics = pd.DataFrame()
+    variables_statistics = pd.DataFrame()
+    parameters_to_monitor = ['turb.n_corr', 'compr.n_corr', 'compr.angle', 'compr.betta', 'turb.betta', 'Ne',
+                                  'compr.inlet.G', 'comb.outlet.T', 'compr.PRtt', 'compr.outlet.T', 'turb.throttle.T',
+                                  'turb.outlet.T']  # список параметров, которые хотим мониторить, пока что вводистя только так
+    monitors = pd.DataFrame(columns=parameters_to_monitor)  # тут будем храниить значеия тех переменных изменение которых хотим мониторить в процессе расчета
+    user_defined_formulas=Parser.Parser_formula.USER_DEFINED_FUNCTIONS
+
     def __init__(self,filename_of_input_data=''):
-        
+
         self.time_before_init=datetime.datetime.now()
         self.time_before_start=np.nan
-        
-        #перечисление возможных единиц измерения
-        self.units={'m':(1,0), 
-           'mm':(0.001,0),
-           'cm':(0.01,0),
-           'dm':(0.1,0),
-           'm':(1,0),
-           'km':(1000,0),
-           'ft':(0.3048,0),
-           'in':(0.0254,0),
-           'Pa':(1,0),
-           'kPa':(1000,0),
-           'MPa':(1000000,0),
-           'gr':(0.001,0),
-           'g':(0.001,0),
-           'kg':(1,0),
-           't':(1000,0),
-           's':(1,0),
-           'sec':(1,0),
-           'min':(60,0),
-           'h':(3600,0),
-           'hr':(3600,0),
-           'C':(1,273.15),
-           'С':(1,273.15), #кириллицей
-           'K':(1,0),
-           'rev':(2*np.pi,0),
-           'ob':(2*np.pi,0),
-           '1':(2*np.pi,0),
-           'W':(1,0),
-           'kW':(1000,0),
-           'MW':(1000000,0),
-           'hp':(735.49875,0), #метрическая лошадиная сила
-           'hp_mechanical':(745.69987158227022,0), #британская/механическая лошадиная сила (ее используют у нас редко, но возможно использование в Британии, США, Канаде...)
-           '%':(0.01,0),
-           'N':(1,0),
-           'kN':(1000,0),
-           'MN':(1000,0),
-           'kgf':(9.80665,0),
-           '':(1,0),
-           '-':(1,0)}
-        
-        self.name_of_engine=''
-        initial_data=dict() #словарь где будут храниться исходные данные
-        
-        initial_data['amount_of_rotors']=set()
-        initial_data['amount_of_betta']=0
-        self.residuals_statistics=pd.DataFrame()
-        self.variables_statistics=pd.DataFrame()
-        
-        self.parameters_to_monitor=['turb.n_corr','compr.n_corr','compr.angle','compr.betta','turb.betta','Ne','compr.inlet.G','comb.outlet.T','compr.PRtt','compr.outlet.T','turb.throttle.T','turb.outlet.T'] #список параметров, которые хотим мониторить, пока что вводистя только так
-        self.monitors=pd.DataFrame(columns=self.parameters_to_monitor) #тут будем храниить значеия тех переменных изменение которых хотим мониторить в процессе расчета
+
+        Engine.initial_data['amount_of_rotors']=set()
+        Engine.initial_data['amount_of_betta']=0
+        # self.residuals_statistics=pd.DataFrame()
+        # self.variables_statistics=pd.DataFrame()
+        #
+        # self.parameters_to_monitor=['turb.n_corr','compr.n_corr','compr.angle','compr.betta','turb.betta','Ne','compr.inlet.G','comb.outlet.T','compr.PRtt','compr.outlet.T','turb.throttle.T','turb.outlet.T'] #список параметров, которые хотим мониторить, пока что вводистя только так
+        # self.monitors=pd.DataFrame(columns=self.parameters_to_monitor) #тут будем храниить значеия тех переменных изменение которых хотим мониторить в процессе расчета
 
 #        self.id_names=[] #в этой штуке будут храниться все узлы двигателя, каждый узел будет иметь свой собсвтенный id соответствующий порядковому номеру из этого списка. В конечном итоге все это нужно для быстродействия, чтобы не использовать строковые данные, только числовые
 #        self.id_links=[]#в этой штук будут хранится ссылки на все узлы двигателя для возможности быстро к ним обратиться
         self.devices=dict()#словарь, где хранятся все узлы имя_узла = ссылка на объект узла
         self.named_main_devices=dict()#дополнительный вспомогательный словарь, в котором хранятся ссылки на некоторые ключевые узлы типа "первый компрессор", "последняя турбина" и т.п. - это нужно для удобства некоторых функций
         self.graphics_of_map={}
-        
+
         self.arguments=dict()#словарь с необходимыми для расчета параметрами определяющими режим работы двигателя. Он формируется при создании экземпляра Engine каждым узлом, входящим в engine
         self.arguments0=dict()
         self.number_of_iterations=0
@@ -142,35 +150,36 @@ class Engine():
         self.balance_of_power_of_rotor=dict()#штука где будут храниться значения величин диасбалансов мощностей на кадом роторе
         self.user_input_operating_modes=list()#список, где будут храниться словари, каждый из которых определяет параметры режима работы двигателя, заданные пользователем
         self.operating_mode=dict()#список, где будут храниться параметры, определяющие режима работы двигателя, рассчитываемые в данный момент
-        self.variables=dict() #количество переменных (а значит и невязок residuals) должно быть равно колво аргументов - колво аргументов заданных в исходных данных initial_data      
+        self.variables=dict() #количество переменных (а значит и невязок residuals) должно быть равно колво аргументов - колво аргументов заданных в исходных данных initial_data
         self.initial_approaches=list()#список, где будут хранитсья первоначальные приближения, задаваемые пользоватлеем через input_data
-        
+
         self.input_data_filename=''
         model_filename=self.read_filename_of_model(filename_of_input_data)
         Parser.Parser_formula.BASE_LINK_TO_EXTRACT = self
-        pl.Preloader(model_filename, initial_data) #здесь идет предварительная обработка данных заданных пользователем через файл модели, не input_data!!!. Эти данные заносятся в массив initial_data, который подается на вход в initial_dat
+        pl.Preloader(model_filename, Engine.initial_data) #здесь идет предварительная обработка данных заданных пользователем через файл модели, не input_data!!!. Эти данные заносятся в массив initial_data, который подается на вход в initial_dat
         self.read_modes_from_input_data() #имя файла input_data передавать необязательно, но если оно передано, то у него наивысший приоритет - именно из него будут взяты данные, если не задано, то дальше будут проверяться параметры в строке при запуске через cmd, если и там пусто, то файла будет искать автоматически в рабочей директории - см.метод read_input_data
         # Parser.Parser_formula.BASE_LINK_TO_EXTRACT=self #задаем базовую ссылку на объект двигателя по которой нужно будет находить параметры в формулах
 
-        self.rezults_data=initial_data['Rezults'] #здесь будут храниться данные о том, какие результаты выводить в конечный файл
-        self.name_of_engine=initial_data['name']
+        self.rezults_data=Engine.initial_data['Rezults'] #здесь будут храниться данные о том, какие результаты выводить в конечный файл
+        self.name_of_engine=Engine.initial_data['name']
 
         self.solvecontrol_use_variables_from_previus_iteration_as_first_estimate=True #штука, которая позволяет при ррасчете нескольких режимов использовать в качестве первоначальных приближений значения variables из предыдущего расчета
-        
-        self.ambient=dev.Ambient(initial_data,self)
-        
+
+        self.ambient=dev.Ambient(Engine.initial_data,self)
+
         i = 0
-        for name_of_device in initial_data["structure"]:
+        for name_of_device in Engine.initial_data["structure"]:
             if name_of_device=='in':
                 solverLog.error(f'Error! Restricted name of device: {name_of_device}')
                 raise SystemExit
             #инициализируем объект узла двигателя
-            device = getattr(dev, initial_data["structure"][name_of_device])(initial_data, self.ambient if i == 0 else device, self, name=name_of_device)
+            device = getattr(dev, Engine.initial_data["structure"][name_of_device])(Engine.initial_data, self.ambient if i == 0 else device, self, name=name_of_device)
             #задаем этот объект узла кка один из параметров объекта двигателя
             setattr(self, name_of_device, device)
             i += 1
- 
-        self.secondary_air_system=dev.Secondary_Air_System(initial_data,self,name='SAS')
+
+
+        self.secondary_air_system=dev.Secondary_Air_System(Engine.initial_data,self,name='SAS')
 
         # for val in initial_data.values(): #в этом цикле проверяем, чтобы у всех объектов Parser.Parser_formula не было в параметрах строчных данных - они должны быть преобразованф в ссылки
         #     if isinstance(val,Parser.Parser_formula):
@@ -186,11 +195,11 @@ class Engine():
             rez=re.findall(r'^n\d{1,3}$',key) #это шаблон для поиска обозначения вала
             if rez:
                 self.balance_of_power_of_rotor[rez[0]]=0.0
-        self.amount_of_rotors=len(initial_data['amount_of_rotors'])
-        self.amount_of_betta=initial_data['amount_of_betta']
-        
+        self.amount_of_rotors=len(Engine.initial_data['amount_of_rotors'])
+        self.amount_of_betta=Engine.initial_data['amount_of_betta']
+
         self.prepare_input_data()
-        
+
         #дальше временный костыль - нужно убрать, см.тудушку 16
         if self.name_of_engine=='TV7-117':
             self.Nsopla=np.nan#эквивалентная мощность сопла
@@ -228,6 +237,19 @@ class Engine():
             self.Cr=(self.devices["cmbstr"].G_fuel)/(self.Thrust)
         if self.name_of_engine=='GTE-170':
             self.Ne=self.turb.N+self.compr.N
+            # self.user_defined_formulas['control_law'].insert_values_in_arguments(Comprangle=self.compr.angle,Th=self.inl.inlet.T,Tturbout=self.turb.outlet.T)
+            # self.user_defined_formulas['control_law'].insert_values_in_arguments(Th=self.inl.inlet.T,
+            #                                                                      Tturbout=self.turb.outlet.T)
+            # self.control_law=self.user_defined_formulas['control_law'].calculate()
+            # self.user_defined_formulas['res_a_plus3'].insert_values_in_arguments(a=self.compr.angle)
+            # self.res_a_plus3=self.user_defined_formulas['res_a_plus3'].calculate()
+            # self.user_defined_formulas['res_a_minus30'].insert_values_in_arguments(a=self.compr.angle)
+            # self.res_a_minus30 = self.user_defined_formulas['res_a_minus30'].calculate()
+            # self.user_defined_formulas['res_a_Tout'].insert_values_in_arguments(Th=self.inl.inlet.T,Tturbout=self.turb.outlet.T)
+            # self.res_a_Tout = self.user_defined_formulas['res_a_Tout'].calculate()
+            # self.user_defined_formulas['f1'].insert_values_in_arguments(Comprangle=self.compr.angle,Th=self.inl.inlet.T,Tturbout=self.turb.outlet.T)
+            # self.f1 = self.user_defined_formulas['f1'].calculate()
+
 
     def read_filename_of_model(self,input_filename):
         # current_dir=os.getcwd()
@@ -315,7 +337,9 @@ class Engine():
                     if not _temp:
                         continue
 
-                    _initial_approach=re.findall(r'(?:\'|\")?(\w+)(?:\'|\")?\s*(?:=|:)\s*(\-?\d+\.?\d*)\s*',_temp[0][1])
+                    # _initial_approach=re.findall(r'(?:\'|\")?(\w+)(?:\'|\")?\s*(?:=|:)\s*(\-?\d+\.?\d*)\s*',_temp[0][1])
+
+                    _initial_approach=re.findall(r'(?:\'|\")?([a-zA-Z0-9_.]+)(?:\'|\")?\s*(?:=|:)\s*(\-?\d+\.?\d*)\s*', _temp[0][1])
                     # _parameters=re.findall(r'(\w+)\s*=\s*(\-?\d+\.?\d*)\s*([\w\%\/\*]*)',_temp[0][0]) #с помощью регулярок дербаним строку с параметрами режимов
                     # _parameters=re.findall(r'((?:(?:\w+\.{1})*\w+))\s*=\s*(\-?\d+\.?\d*)\s*([\w\%\/\*]*)',_temp[0][0]) #с помощью регулярок дербаним строку с параметрами режимов
                     _parameters=_temp[0][0].strip().split(';')
@@ -323,7 +347,7 @@ class Engine():
                     for approach in _initial_approach: #дербаним первоначальные приближения
                         name=approach[0]
                         value=float(approach[1])
-                        approach_dict[name]=value                       
+                        approach_dict[name]=value
                     self.initial_approaches.append(approach_dict)
 
                     user_input=dict()
@@ -339,7 +363,7 @@ class Engine():
                             user_input[name] =_obj
                             for_log[name] = value.strip()
                         else:
-                            rez=re.findall(r'([\d\.]+)(\w*)',value)[0]
+                            rez=re.findall(r'([\d\.-]+)(\w*)',value)[0]
                             self.unit_rezult=1
                             self.unit_operation='*'
                             value=float(rez[0])
@@ -358,17 +382,17 @@ class Engine():
                 #     if _temp!='':
                 #         filename_of_model=_temp
                 #         solverLog.info('File of model: '+filename_of_model)
-                        
+
             solverLog.info('Reading input data: ok')
 #        print(self.user_input_operating_modes)
         log_text='User inputs '+str(len(for_log_main))+' modes to solve:\n'
         for n,_string in enumerate(for_log_main):
             log_text+=str(n)+') '+str(_string)+'\n'
         solverLog.info(log_text)
-        
-        
-#                    if calc_mode=='{identification}':  
-#                
+
+
+#                    if calc_mode=='{identification}':
+#
 #                _parameters=re.findall(r'(\w+)\s*=\s*(\d+\.?\d*)\s*([\w\%\/\*]*)',data.group(2))#ищем в оставшесйя строке экспериментальные параметры
 #                for parameter in _parameters:
 #                    self.unit_rezult=1
@@ -383,11 +407,11 @@ class Engine():
 #                        self.parser_for_units(unit)
 #                        experiment_dict[name]=value*self.unit_rezult
 #                self.experiment_list.append(experiment_dict)
-        
-        
-        
-        
-    
+
+
+
+
+
     def prepare_input_data(self): #преобразуем словарь user_input_operating_modes в нужный вид из вида, который зада пользователь
          #для удобства находим характерные узлы и всякие переменные и сохраняем их имена
         for name,device in self.devices.items(): #для удобства находим характерные узлы и всякие переменные и сохраняем их имена
@@ -439,7 +463,7 @@ class Engine():
             if device.__class__.__name__ == 'Secondary_Air_System':
                 self.named_main_devices['secondary_air_system']=device
                 continue
-        #в словаре ниже для удобства перечисляются типичные названия переменных, используемые в обиходе    
+        #в словаре ниже для удобства перечисляются типичные названия переменных, используемые в обиходе
         possible_names={r'^ *(?:T|t)_*(?:h|atm) *$':'Th', #^-начстроки, пробел* - 0 или более пробелов, (:?T|t) - либо T либо t, _* - 0 или более вхождений _, (?:h|atm) - то же самое, пробел* - 0 или более пробелов, $ - конец строки
                         r'^ *(?:P|p)_*(?:h|atm) *$':'Ph',
                         r'^ *(?:dT|dt)_*(?:|ISA|isa) *$':'dT.ISA',
@@ -472,7 +496,7 @@ class Engine():
             user_input_operating_mode_modified={}
             temp_unidentified_values=user_input_operating_mode.copy()
             keys=user_input_operating_mode.keys()
-            for input_parameter_key in keys: #проходимся по всем ключам из словарей self.user_input_operating_modes 
+            for input_parameter_key in keys: #проходимся по всем ключам из словарей self.user_input_operating_modes
                 _value_found=False
                 for pattern,new_key in possible_names.items(): #проходимся по всем ключам из словаря possible_names
                     # rez=re.findall(pattern,input_parameter_key)
@@ -484,19 +508,19 @@ class Engine():
                         break
                 if self.str2parameter(input_parameter_key)!=str and _value_found==False:
                     user_input_operating_mode_modified[input_parameter_key]=user_input_operating_mode[input_parameter_key]
-                    temp_unidentified_values.pop(input_parameter_key)  
-            if len(temp_unidentified_values)>0: 
+                    temp_unidentified_values.pop(input_parameter_key)
+            if len(temp_unidentified_values)>0:
                 solverLog.error('ERROR: Unidentified value(s) was found in input data. Mode #'+str(mode_num+1)+': '+str(temp_unidentified_values))
                 print('ERROR: Unidentified value(s) was found in input data. Mode #'+str(mode_num+1)+': '+str(temp_unidentified_values))
                 raise SystemExit
             #проверяем задал ли пользователь вместо температуры и давления высоту H и отклонение о стандартной температуры dT
             if ("Th" in user_input_operating_mode_modified) and ("dT.ISA" in user_input_operating_mode_modified):
-                solverLog.error('ERROR: Переопределено значение температуры в исходных данных. Заданы одновременно Th и dT. Режим '+str(mode_num+1))    
+                solverLog.error('ERROR: Переопределено значение температуры в исходных данных. Заданы одновременно Th и dT. Режим '+str(mode_num+1))
                 print('ERROR: Переопределено значение температуры в исходных данных. Заданы одновременно Th и dT. Режим '+str(mode_num+1))
                 raise SystemExit
-    
+
             if ("H" in user_input_operating_mode_modified) and ("Ph" in user_input_operating_mode_modified):
-                solverLog.error('ERROR: Переопределено значение давления окружающей среды в исходных данных. Заданы одновременно H и Ph. Режим '+str(mode_num+1))    
+                solverLog.error('ERROR: Переопределено значение давления окружающей среды в исходных данных. Заданы одновременно H и Ph. Режим '+str(mode_num+1))
                 print('Переопределено значение давления окружающей среды в исходных данных. Заданы одновременно H и Ph. Режим '+str(mode_num+1))
                 raise SystemExit
             if ("H" in user_input_operating_mode_modified) and ("Th" in user_input_operating_mode_modified):
@@ -513,12 +537,12 @@ class Engine():
         solverLog.info(log_text)
 
         self.arguments0=copy.copy(self.arguments) #сохраняем исходный пустой словарь arguments, потом при расчете каждого отдельного режима будем его заполнять заново
-        
+
 
     def prepare_arguments_and_variables(self): #штука, которая формирует массив arguments на основе operating_mode
         #проверяем наличие совпадений ключей в self.arguments и исходных данных self.user_input_operating_modes. При наличии совпадений заполняем соответствующий параметр в self.arguments
         self.arguments=copy.copy(self.arguments0) #сбрасываем значения в self.arguments
-        
+
         for argument_key in self.arguments.keys():
             _temp=str() #используем как сигнализатор, что input_parameter_key совпал с одним из значений в self.arguments.keys
             for input_parameter_key in self.operating_mode.keys():
@@ -528,18 +552,18 @@ class Engine():
                         raise SystemExit
                     _temp=input_parameter_key
                     self.arguments[argument_key]=self.operating_mode[input_parameter_key]
-        
+
         #т.к. в arguments есть два ключа M и V, а нужно оставить только один из них, тот который задан, то далее убираем пустой ключ
         if not self.arguments['M'] is np.nan and self.arguments['V'] is np.nan:
             del self.arguments['V']
         elif not self.arguments['V'] is np.nan and self.arguments['M'] is np.nan:
             del self.arguments['M']
-                        
-                    
+
+
         #теперь формируем словарь с варьируемыми переменными путем выбрасывания из словаря self.arguments непустых значений
-        
+
         for argument_key,argument_value in self.arguments.items():
-            if argument_value is np.nan: 
+            if argument_value is np.nan:
                 #здесь проверяем, если переменную можно брать из предыдущей итерации расчета, то берем
                 if self.solvecontrol_use_variables_from_previus_iteration_as_first_estimate==False:
                     self.variables[argument_key]=np.nan
@@ -548,39 +572,39 @@ class Engine():
                         self.variables[argument_key]=np.nan
             elif argument_key in self.variables:
                 del self.variables[argument_key]
-              
-                
-    #в этой штуке проверяем подряд все переменные в словаре self.variables и задаем первоначальные приближения        
+
+
+    #в этой штуке проверяем подряд все переменные в словаре self.variables и задаем первоначальные приближения
     def estimate_variables(self,variables_estimates={}):  #variables_estimate - массив, получаемый от пользователя, где могут быть (не обязательно)  принудительно заданы первоначальные приближения, в случае их отсутствия приближения рассчитываются автоматически
-        
+
         #по порядку перебираем все возможные значения переменных и назначаем им приближения
         #приоритетность использования первоначальных приближений: сначала задаваемые пользователем в файле input_data, затем из предыдущей итерации, затем автоматически
-        for var_key,var_value in self.variables.items(): 
+        for var_key,var_value in self.variables.items():
             if var_key in variables_estimates: #Сначала проверяем наличие в массиве variables_estimate
                 self.variables[var_key]=variables_estimates[var_key]
             elif self.solvecontrol_use_variables_from_previus_iteration_as_first_estimate==True and not var_value is np.nan:
                 continue
             elif re.findall(r'^n\d+$',var_key): #приближение по любым оборотам основных роторов. (чаще всего основные режимы лежат в диапазоне 0,9-1)
                 self.variables[var_key]=0.95 #TODO! возможно стоит сделать так, чтобы рекомендуемые обороты лежали где-то по середине между минимальными и максимальнымии оборотами на характеристике компрессорау
-            elif re.findall(r'^(.)*_*betta$',var_key): #приближение по параметру бетта для характеристик (обычно в диапазоне 0-1 в середине, если все работает как надо)
+            elif re.findall(r'^(.)*\.*betta$',var_key): #приближение по параметру бетта для характеристик (обычно в диапазоне 0-1 в середине, если все работает как надо)
                 self.variables[var_key]=0.5
-            elif re.findall(r'^(.)*_*angle$',var_key): #приближение по параметру угла для характеристик, тут неочевидно TODO! возможно стоит пересмотреть алгоритм оценки альфа
+            elif re.findall(r'^(.)*\.*angle$',var_key): #приближение по параметру угла для характеристик, тут неочевидно TODO! возможно стоит пересмотреть алгоритм оценки альфа
                 self.variables[var_key]=0.0
-            elif re.findall(r'^(.)*_*Gf$',var_key): #приближение по параметру относительного расхода топлива. Величина может колебаться от 0 (нет топлива) до 1 (примерно стехиометрия). Обычно на двигателя средняя альфа в КС колеблется в диапазоне от 2-3 до 5-8. Возьмем среднюю 5, ей соответствует параметр = (1/альфа) = 0,2
-                self.variables[var_key]=0.2                
-        for var_key,var_value in self.variables.items():   #приближение по расходам сделано в отдельном цикле, потому что они могут зависеть от других приближений, задаваемых в предыдущем цикле выше       
+            elif re.findall(r'^(.)*\.*Gf$',var_key): #приближение по параметру относительного расхода топлива. Величина может колебаться от 0 (нет топлива) до 1 (примерно стехиометрия). Обычно на двигателя средняя альфа в КС колеблется в диапазоне от 2-3 до 5-8. Возьмем среднюю 5, ей соответствует параметр = (1/альфа) = 0,2
+                self.variables[var_key]=0.2
+        for var_key,var_value in self.variables.items():   #приближение по расходам сделано в отдельном цикле, потому что они могут зависеть от других приближений, задаваемых в предыдущем цикле выше
             if re.findall(r'^Gin$',var_key):
                 if var_key in variables_estimates: #Сначала проверяем наличие в массиве variables_estimate
                     self.variables[var_key]=variables_estimates[var_key]
                 elif self.solvecontrol_use_variables_from_previus_iteration_as_first_estimate==True and not np.isnan(var_value):
                     continue
-                else:#приближение по параметру расхода воздуха на входе в двигатель. Величина может колебаться в неограниченных пределах, можно примерно ее оценить из характеристики первого компрессора                 
+                else:#приближение по параметру расхода воздуха на входе в двигатель. Величина может колебаться в неограниченных пределах, можно примерно ее оценить из характеристики первого компрессора
                     name='n'+self.named_main_devices['first_compressor_rotor']
                     if name in self.variables:
                         _n_corr_temp=self.variables[name]
                     elif name in self.arguments and not np.isnan(self.arguments[name]):
                         _n_corr_temp=self.arguments[name]
-                    
+
                     _betta_temp=self.variables[self.named_main_devices['first_compressor'].name+'.betta']
 
                     if hasattr(self.named_main_devices['first_compressor'],'angle'):
@@ -600,9 +624,9 @@ class Engine():
                     continue
                 else:
                     self.variables[var_key]=self.variables['Gin']
-                
+
     #в этом методе дополняем массив невязок
-    def set_residuals_for_static_operating_mode(self): 
+    def set_residuals_for_static_operating_mode(self):
         #так как мы считаем статический режим, то одна из невязок по умолчанию - это баланс мощности на всех роторах кроме последнего (подразумевается, что силовая турбина - это всегда последний по счету ротор, если иначе - нужно переделать алгоритм)
         # if self.amount_of_rotors>1: #эта ветвь работает когда у нас больше одного вала и последний из них - это вал силовой турбины, на него НЕ назначается невязка по мощности. Подразумевается, что этот последний вал генерит мощность на сторону
         #     for rotor in list(self.balance_of_power_of_rotor)[0:-1]:
@@ -612,7 +636,7 @@ class Engine():
         #         self.residuals['dN_'+rotor]=self.balance_of_power_of_rotor[rotor]/self.named_main_devices['first_turbine'].N #NB! здесь в знаменателе мощность первой турбины, что в общем не обязательно. Первая турбина выбрана, потому, что она есть всегда и обычно она самая мощная, относительно нее удобно переводить величины в относительный вид
         for rotor in list(self.balance_of_power_of_rotor):
             self.residuals['dN.'+rotor]=self.balance_of_power_of_rotor[rotor]/self.named_main_devices['first_turbine'].N #NB! здесь в знаменателе мощность первой турбины, что в общем не обязательно. Первая турбина выбрана, потому, что она есть всегда и обычно она самая мощная, относительно нее удобно переводить величины в относительный вид
-            
+
 
 
         #далее просматриваем массив исходных данных заданных пользователем self.operating_mode и ищем там ключ(и), который задает еще одну невязку характеризующую режим работы двигателя (это ключ, который отсутствует в словаре self.arguments
@@ -621,7 +645,7 @@ class Engine():
                 self.residuals[key]=self.operating_mode[key].calculate()
             elif key not in self.arguments:
                 if self.operating_mode[key]==0:
-                    solverLog.error('Ошибка!!! параметр {parameter} равен нулю, а относительного него считается неявзка - это фиаско, братан! По идее таких параметров не должно быть. Обращайтесь к разработчику'.format(parameter=self.operating_mode[key]))
+                    solverLog.error(f"Ошибка!!! параметр в исходных данных {key}={self.operating_mode[key]} (равен нулю), а относительного него считается неявзка - это фиаско, братан! По идее таких параметров не должно быть. Обращайтесь к разработчику, либо попробуйте его задать равным чуть больше нуля, например 0,001")
                 if self.named_main_devices['last_turbine'].name+'.N'==key:
                     _rotor=self.named_main_devices['last_turbine'].name_of_n
                     _N=self.operating_mode[key]
@@ -629,49 +653,52 @@ class Engine():
                 else:
                     self.residuals[key]=(self.operating_mode[key] - self.str2parameter(key) )/self.operating_mode[key]
 
-                
-        
+
+
 #        self.named_main_devices['last_turbine_rotor']
-        
-    
+
+
     #формируем функцию, которую удобно скормить scipy.optimize.root, чтобы она ее решила
     def equation_to_solve(self,variables_list):
         for var_key,var_val in zip(self.variables.keys(),variables_list):
 #            print(var_key, var_val)
             self.variables[var_key]=var_val
-        
+
         self.arguments.update(self.variables)
         not_calculated_model=copy.deepcopy(self)
         Parser.Parser_formula.BASE_LINK_TO_EXTRACT=not_calculated_model
         try:
             not_calculated_model.calculate()
         except:
-            print("TROUBLE in calculating of model :( ")
+            print(f"TROUBLE in calculating of model :( \n variables: {self.variables} \n residuals: {self.residuals}")
 #        print(self.lpc.N)
 #        print(self.hpc.N)
 #        print(self.hpt.N)
+#         print(f'alfa={not_calculated_model.variables["compr.angle"]}')
+#         print(f'Tout={not_calculated_model.turb.outlet.T}')
         not_calculated_model.set_residuals_for_static_operating_mode() #TODO! есть баг: после успешного расчета когда зеначения варьируемых параметров уже известны и проводится контрольный расчет с этими варьируемыми параметрами на основе базовой "чистой"/исходной модели, то внутрь этой "чистой" модели не попадают те невязки в массив residuals, которые рассчитываются  вэтой функции. Возможное решение - внести эту функцию внутрь calculate
+        # print(f'{not_calculated_model.residuals["residual"]}')
         if len(self.variables)!=len(not_calculated_model.residuals):
             solverLog.warning(f'Warning: lenght of variables array not equivalent to residuals array: \n Variables:{self.variables} \n Residuals: {not_calculated_model.residuals}')
             # raise SystemExit
-        self.monitors=self.monitors.append(not_calculated_model.extract_values_for_monitors(),ignore_index=True)
-        self.residuals_statistics=self.residuals_statistics.append(not_calculated_model.residuals,ignore_index=True)
-        self.variables_statistics=self.variables_statistics.append(self.variables,ignore_index=True)
+        Engine.monitors=Engine.monitors.append(not_calculated_model.extract_values_for_monitors(),ignore_index=True)
+        Engine.residuals_statistics=Engine.residuals_statistics.append(not_calculated_model.residuals,ignore_index=True)
+        Engine.variables_statistics=Engine.variables_statistics.append(self.variables,ignore_index=True)
 #        print(not_calculated_model.residuals)
         self.number_of_iterations+=1
 #        print(self.number_of_iterations)
         return list(not_calculated_model.residuals.values())
-    
+
 #        здесь нужно сформировать массив невязок отталкиваясь от заданного пользователем массива input_data и добавить их в частично сформированный массив residuals
 
     def extract_values_for_monitors(self): #штука для записи мониторируемых параметров в массив self.monitors
         _temp={}
-        for parameter in self.parameters_to_monitor:
+        for parameter in Engine.parameters_to_monitor:
             val=self.str2parameter(parameter)
             _temp[parameter]=val
         return _temp
-        
-        
+
+
     def str2parameter(self,string): #вспомогательная функция для преобразования строки, содержащей ссылку на параметр, собственно в значение этого параметра
         broken_string = string.split('.')
         rez=self
@@ -680,10 +707,10 @@ class Engine():
                 rez=getattr(rez,val)
             else:
                 return 'unknown parameter '+string
-        return rez          
-    
-    
-    def solve_modes(self): #решение для стаицонарного режима работы двигателя
+        return rez
+
+
+    def solve_static_modes(self): #решение для стаицонарного режима работы двигателя
         # solverLog.info('Initializating...')
 #        self.read_input_data()
 #        self.prepare_input_data() #тут формируем список self.user_input_operating_modes, в котором каждый элемент - это словарь с параметрами, определяющими режим работы двигателя
@@ -694,7 +721,7 @@ class Engine():
         entire_status=[] #будем тут хранить среднюю величину невязок по всем расчетным режимам
 #        quantity_of_modes=len(self.user_input_operating_modes) #определяем количество режимов которые надо посчитать и по очереди их считаем
 #        self.arguments0=copy.copy(self.arguments) #сохраняем исходный пустой словарь arguments, потом при расчете каждого отдельного режима будем его заполнять заново
-        for number_of_mode,self.operating_mode in enumerate(self.user_input_operating_modes): 
+        for number_of_mode,self.operating_mode in enumerate(self.user_input_operating_modes):
             solverLog.info('Mode '+str(number_of_mode)+str(': start of solving...'))
             self.time_before_mode_start=datetime.datetime.now()
             self.prepare_arguments_and_variables() #тут заполняем словарь arguments и формируем словарь variables (но пока не заполняем)
@@ -709,7 +736,7 @@ class Engine():
             variables0=copy.copy(self.variables)
             while stability_factor>0.01: #если продолжит что-то разваливаться, то возможно стоит уменьшить значение слева
                 try:
-                    rez=root(self.equation_to_solve,list(self.variables.values()),method='lm',options={'ftol': 1.0e-10, 'xtol': 1.0e-10, 'factor': stability_factor})
+                    rez=root(self.equation_to_solve,np.array(list(self.variables.values())),method='lm',options={'ftol': 1.0e-10, 'xtol': 1.0e-10, 'factor': stability_factor})
                     break
                 except ValueError:
                     solverLog.info('Unstable calculation. Trying to reduce parameter "factor" in function scipy.optimize.root. Factor = '+str(stability_factor))
@@ -719,13 +746,13 @@ class Engine():
                 solverLog.error('Error! Variables: '+str(self.variables))
                 self.make_graphics()
                 raise SystemExit
-            
+
             dtime=datetime.datetime.now()-self.time_before_mode_start
             solverLog.info('Rezulting variables: '+str(self.variables))
-            solverLog.info('Rezulting residuals: '+str(dict(self.residuals_statistics.iloc[-1])))
+            solverLog.info('Rezulting residuals: '+str(dict(Engine.residuals_statistics.iloc[-1])))
             solverLog.info('Mode '+str(number_of_mode)+': completed. (time:'+str(dtime)+'). Solver success status:'+str(rez['success'])+'. '+str(rez['message']+'\n'))
 
-            entire_status.append(self.residuals_statistics.iloc[-1].sum())
+            entire_status.append(Engine.residuals_statistics.iloc[-1].sum())
             model_to_save_rezults=copy.deepcopy(self) #создаем копию текущей еще не посчитанной модели, чтобы на следующем шаге посчитать ее и не "пачкать" текущую модель
             model_to_save_rezults.calculate()#полученную модель нужно воспринимать как результат расчета, хранящий в себе результата расчета текущей модели
             model_to_save_rezults.set_residuals_for_static_operating_mode()
@@ -737,7 +764,7 @@ class Engine():
             solverLog.info('Solving status: Full success')
 #            print('Solving status: Full success')
         else:
-            solverLog.info('Solving status: !!!warning!!! Check sum of residuals by modes:') 
+            solverLog.info('Solving status: !!!warning!!! Check sum of residuals by modes:')
             solverLog.info(str(entire_status))
         time_of_init=self.time_before_start-self.time_before_init
         time_of_calc=datetime.datetime.now()-self.time_before_start
@@ -745,7 +772,7 @@ class Engine():
         solverLog.info("Time of solving: "+str(time_of_calc))
 #        print("Time of solving: "+str(time_of_calc))
         return rezults
-    
+
     def make_graphics(self):
         fig_residuals, axes = plt.subplots()
         fig_residuals.set_size_inches(15, 15)
@@ -753,40 +780,40 @@ class Engine():
         fig_variables.set_size_inches(15, 15)
         # fig_monitors, axes3 = plt.subplots()
         # fig_monitors.set_size_inches(15, 15)
-        
-        indexes=list(self.residuals_statistics.index.values)
-        for column_caption in self.residuals_statistics.columns.values.tolist():
-            axes.plot(indexes,list(self.residuals_statistics[column_caption]),label=column_caption)
+
+        indexes=list(Engine.residuals_statistics.index.values)
+        for column_caption in Engine.residuals_statistics.columns.values.tolist():
+            axes.plot(indexes,list(Engine.residuals_statistics[column_caption]),label=column_caption)
         axes.legend(fontsize=12)
         axes.set_xlabel('Number of iteration',fontsize=12)
         axes.set_ylabel('Residual',fontsize=12)
         axes.set_title('Monitor of residuals',fontsize=16)
-        
-        for column_caption in self.variables_statistics.columns.values.tolist():
-            axes2.plot(indexes,list(self.variables_statistics[column_caption]),label=column_caption)
+
+        for column_caption in Engine.variables_statistics.columns.values.tolist():
+            axes2.plot(indexes,list(Engine.variables_statistics[column_caption]),label=column_caption)
         axes2.legend(fontsize=12)
         axes2.set_xlabel('Number of iteration',fontsize=12)
         axes2.set_ylabel('Variable',fontsize=12)
         axes2.set_title('Monitors of variable parameters',fontsize=16)
-        
-        for column_caption in self.monitors.columns.values.tolist():
+
+        for column_caption in Engine.monitors.columns.values.tolist():
             fig_monitors, axes3 = plt.subplots()
             fig_monitors.set_size_inches(15, 15)
-            axes3.plot(indexes,list(self.monitors[column_caption]),label=column_caption+'='+str(self.monitors[column_caption].iloc[-1]))
+            axes3.plot(indexes,list(Engine.monitors[column_caption]),label=column_caption+'='+str(Engine.monitors[column_caption].iloc[-1]))
             axes3.legend(fontsize=12)
             axes3.set_xlabel('Number of iteration',fontsize=12)
             axes3.set_ylabel('Variable',fontsize=12)
             axes3.set_title('Monitors of user defined parameters',fontsize=16)
             plt.close(fig_monitors)
             fig_monitors.savefig('monitor['+column_caption+'].png',bbox_inches='tight')
-            
+
         plt.close(fig_residuals)
         plt.close(fig_variables)
         # plt.close(fig_monitors)
         fig_residuals.savefig('residuals.png',bbox_inches='tight')
         fig_variables.savefig('variables.png',bbox_inches='tight')
         # fig_monitors.savefig('monitors.png',bbox_inches='tight')
-        
+
     def make_graphics_of_maps(self,rezults): #TODO! переделать так, чтобы могла работать если характеристика зависит еще от угла ВНА
         # fig_residuals, axes = plt.subplots()
         # fig_residuals.set_size_inches(15, 15)
@@ -837,7 +864,7 @@ class Engine():
                             Gvect=[]
                             PRvect=[]
                             # Effvect=[]
-                            for ni in n_vector_hq:                        
+                            for ni in n_vector_hq:
                                 Gvect.append(float(G_map(ni,bettai)*self.named_main_devices[name].ident_G_value))
                                 PRvect.append(float(PR_map(ni,bettai)*self.named_main_devices[name].ident_PR_value))
                                 # Effvect.append(float(Eff_map(ni,bettai)))
@@ -863,7 +890,7 @@ class Engine():
                             axes.scatter(X,Y,color='black',s=50,marker='+')
                         axes.set_xlim([4,10])
                         axes.set_ylim([3,20])
-                            
+
                 if 'turbine' in name:
                     if ('first_turbine' in name) or ('second_turbine' in name and not(self.named_main_devices['second_turbine'] is self.named_main_devices['first_turbine'])) or ('last_turbine' in name and not(self.named_main_devices['last_turbine'] is self.named_main_devices['second_turbine'])):
                         fig, axes = plt.subplots()
@@ -906,7 +933,7 @@ class Engine():
                             Capvect=[]
                             PRvect=[]
                             # Effvect=[]
-                            for ni in n_vector_hq:                        
+                            for ni in n_vector_hq:
                                 Capvect.append(float(Cap_map(ni,bettai)*ni))
                                 PRvect.append(float(PR_map(ni,bettai)))
                                 # Effvect.append(float(Eff_map(ni,bettai)))
@@ -934,8 +961,7 @@ class Engine():
                             X.append(rez.named_main_devices[name].throttle.capacity*rez.named_main_devices[name].n_corr)
                             Y.append(rez.named_main_devices[name].PRtt)
                             axes.scatter(X,Y,color='black',s=50,marker='+')
-        plt.show()
-
+        # plt.show()
 
     def parser_for_units(self,unit_string): #штука, которой на вход передают строку, содержащую единицы измерения (допускается наличие символов *,/,^), которые она парсит и переводит эту строку в числовое значение, соответствующее переводу единиц измерения в СИ
         _rez=re.search(r'(?:\/|\*)',unit_string) #
@@ -967,7 +993,7 @@ class Engine():
                 self.unit_rezult*=unit_rez
             elif self.unit_operation=='/':
                 self.unit_rezult/=unit_rez
-                
+
     #метод для замены указанных увязочных коэффициентов в модели (используется для увязки)
     def update_ident_coefs(self,new_ident_coefs):
         for coef_name,coef_value in new_ident_coefs.items(): #пробегаемся по всем коэффициентам
@@ -990,7 +1016,7 @@ class Engine():
                 solverLog.error('ERROR: Not found device from identification coefficient: '+coef_name)
 #                print('ERROR: Not found device from identification coefficient: '+coef_name)
                 raise SystemExit
-     
+
     #функция для записи в dataframe результатов расчета в виде, который переваривает бенч
     def data_to_table(self,Name='',Value='',Dimension='',round_to=4):
         if self.df.empty:
@@ -998,7 +1024,7 @@ class Engine():
         else:
             ind=self.df.index[-1]+1
         self.df.loc[ind]=[Name,Dimension,round(float(Value),round_to)]
-        
+
     def data_to_table2(self,Name='',Value='',Dimension='',round_to=6): #nоже самое, только value - это список
         list_of_values=[]
         for val in Value:
@@ -1008,10 +1034,11 @@ class Engine():
         else:
             ind=self.df.index[-1]+1
         self.df.loc[ind]=[Name,Dimension]+list_of_values
-    
+
     #штука для сохранения результатов в файл на основе данных, переденных через раздел {Rezults} в файле модели. Результаты извлекаются из объекта results, передаваемого через конструктор - это должен быть экземпляр engine
-    def save_rezults_to_file(self,rezults_data=np.nan,filename_where_to_save=''): 
-        if isinstance(rezults_data, Engine):     
+    def save_rezults_to_file(self,rezults_data=np.nan,filename_where_to_save=''):
+        #TODO! продумать возможность вывода в результаты значений формул пользователя из входного файла
+        if isinstance(rezults_data, Engine):
             if not hasattr(self,'df'):
                 self.df = pd.DataFrame(columns=['Name','Dimension','Value'])
             for rezult_data in self.rezults_data:
@@ -1041,10 +1068,10 @@ class Engine():
                 self.data_to_table2(Name=_name,Value=_values,Dimension=_dimension)
             self.df.to_csv(filename_where_to_save)
 
-                
-            
-            
-            
+
+
+
+
     def parametric_study(self,par1_dict,par2_dict):
         parametric_study_rezults=[]
         par1_name=list(par1_dict.keys())[0]
@@ -1056,13 +1083,13 @@ class Engine():
             for par2_val in par2_val_list:
                 self.update_str_parameter(par2_name,par2_val)
                 solverLog.info(f'PARAMETRIC_STUDY: {par1_name}={par1_val}; {par2_name}={par2_val}')
-                _rez=self.solve_modes()
+                _rez=self.solve_static_modes
                 parametric_study_rezults.append({par1_name:par1_val,par2_name:par2_val,'rez':_rez})
         return parametric_study_rezults
-                    
 
-                        
-            
+
+
+
     def update_str_parameter(self,string,new_val): #вспомогательная функция, которой на вход подается строка с именем параметра, который нужно заменить в модели
         broken_string = string.split('.')
         rez=self
@@ -1084,15 +1111,15 @@ class Engine():
                     break
                 else:
                     _parameter=broken_string[2]
-                    setattr(getattr(rez,_device),_parameter,new_val) 
+                    setattr(getattr(rez,_device),_parameter,new_val)
             else:
                 solverLog.error('ERROR! Wrong parameter: '+string)
                 raise SystemExit
 
-           
-        
+
+
 #ДАЛЬШЕ ЗАПУСК! Надо бы вынести в отдельный пусковой файл. При увязке отключить
-#ВЕРСИЯ ДЛЯ ПК    
+#ВЕРСИЯ ДЛЯ ПК
 # Model0=Engine('input_data_for_identification.dat') #исходная непосчитанная модель с заведенными в нее исходными данными
 #ВЕРСИЯ ДЛЯ ЗАПУСКА ЧЕРЕЗ КОМАНДНУЮ СТРОКУ
 #Model0=Engine(read_model()) #исходная непосчитанная модель с заведенными в нее исходными данными

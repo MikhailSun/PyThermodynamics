@@ -29,6 +29,24 @@ dT=0.1
 #TODO!!! сделать механизм, который бы обеспечивал невылет расчета если давление в точке подвода больше чем в точке отбора
 #TODO!!! нужно бы переделать все узлы через механизм свойств
 
+#аналог встроенной в питон функции hasattr только для сложных адресов к параметру, указанных через точку, например: obj.a.b.parameter
+#возвращает кортеж где первое значение - это true, если адрес присутствиует, false - если отсутствует, второе значение - это значение параметра по адресу (если он существует)
+def has_address(obj, address_to_attr):
+    keys = address_to_attr.strip().split('.')
+    for key in keys:
+        if hasattr(obj, key):
+            obj = getattr(obj, key)
+        else:
+            return (False,np.nan)
+    return (True,obj)
+
+def set_address(obj, address_to_attr, value):
+    keys = address_to_attr.strip().split('.')
+    for key in keys[:-1]:
+        if hasattr(obj, key):
+            obj = getattr(obj, key)
+    setattr(obj,keys[-1],value)
+
 #класс для описания всех параметров в сечении потока
 """
 class CrossSection():
@@ -603,13 +621,78 @@ class default_function():
 #КЛАССЫ УЗЛОВ ДВИГАТЕЛЯ
 
 class Compressor():
+    #перечисление всех возможных параметров узла в следующем формате: dict('краткое_обозначение_в_коде':('полное_обозначение',значение_по_умолчанию,обязательно_ли_задавать_в_исходных_данных),...)
+    parameters={'variable_guide_vanes':('наличие регулируемых направляющих аппаратов',False,False),
+                'rotor':('номер ротора',np.nan,True), #номер ротора (этот номер должен быть согласован с другими узлами ГТД на этом же роторе, т.е. узлы (турбина) на одном роторе имеют один номер ротора). номер ротора должен начинаться от 1 (не 0!). Все ротора должны иметь последовательные номера в порядке возрастания от 1.
+                'inlet.F':('площадь сечения на входе', np.nan,False),
+                'outlet.F': ('площадь сечения на выходе', np.nan, False),
+                'A_G_ncorr': ('поправка к характеристике компрессора по расходу в зависимости от приведенных оборотов', np.nan, False),
+                'A_PR_ncorr': ('поправка к характеристике компрессора по степени повышения давления в зависимости от приведенных оборотов', np.nan, False),
+                'A_eff_ncorr': ('поправка к характеристике компрессора по кпд в зависимости от приведенных оборотов', np.nan, False),
+                'A_G_Re': ('поправка к характеристике компрессора по расходу в зависимости от числа Рейнольдса', np.nan, False),
+                'A_PR_Re': ('поправка к характеристике компрессора по степени повышения давления в зависимости от числа Рейнольдса', np.nan, False),
+                'A_eff_Re': ('поправка к характеристике компрессора по кпд в зависимости от числа Рейнольдса', np.nan, False),
+                'ident.G': ('коэффициент увязки к характеристике компрессора по расходу', 1.0, False),
+                'ident.PR': ('коэффициент увязки к характеристике компрессора по степени повышения давления', 1.0, False),
+                'ident.eff': ('коэффициент увязки к характеристике компрессора по кпд', 1.0, False),
+                'ident.n': ('коэффициент увязки к характеристике компрессора по оборотам', 1.0, False),
+                'T_inlet_design_point': ('поправка к характеристике компрессора по кпд в зависимости от числа Рейнольдса', 288.15, False),
+                'P_inlet_design_point': ('поправка к характеристике компрессора по кпд в зависимости от числа Рейнольдса', 101325, False),
+                }
+
     def __init__(self, initial_data, upstream, engine, name):
         self.name=name
-#        id_names.append(name)
-#        id_links.append(self)
+        self.upstream=upstream
+        self.inlet=upstream.outlet
+        self.outlet=td.CrossSection(self.name)
+
         engine.devices[name] = self
-        self.variable_guide_vanes=initial_data.get((name+'.variable_guide_vanes'),False) #параметр, который говорит о том, будут ли использоваться поворотные направляющие аппараты. Если да, то алгоритм ожидает дополнительный варьируемый параметр - угол поворота НА и несколько характеристик компрессора, соответствующих различным углам НА
-        self.rotor=int(initial_data[name+'.rotor']) #номер ротора (этот номер должен быть согласован с другими узлами ГТД на этом же роторе, т.е. узлы (турбина) на одном роторе имеют один номер ротора). номер ротора должен начинаться от 1 (не 0!). Все ротора должны иметь последовательные номера в порядке возрастания от 1.
+        for key in Compressor.parameters.keys():
+            #тут нужно сделать возможность задавать значение new_value функцией из того, что задал пользователь
+            #откуда initial_data знает уже что там находистя объект parser_formula?
+            data_from_file=initial_data.get((name + '.' + key), np.nan)
+            new_value = initial_data.get((name + '.' + key), np.nan)
+
+            if not np.isnan(new_value):
+                old_value=has_address(self, key)
+                if old_value[0] and not np.isnan(old_value[1]):
+                    name_of_parameter = name + '.' + key
+                    solverLog.info(f'Error! Parameters conflict in device "{self.name}". Parameter "{name_of_parameter}"={new_value} conflicts with old value = {old_value[1]}.')
+                    raise SystemExit
+
+                set_address(self, key, new_value)
+
+
+        # self.variable_guide_vanes=initial_data.get((name+'.variable_guide_vanes'),False) #параметр, который говорит о том, будут ли использоваться поворотные направляющие аппараты. Если да, то алгоритм ожидает дополнительный варьируемый параметр - угол поворота НА и несколько характеристик компрессора, соответствующих различным углам НА
+        # self.rotor=int(initial_data[name+'.rotor']) #номер ротора (этот номер должен быть согласован с другими узлами ГТД на этом же роторе, т.е. узлы (турбина) на одном роторе имеют один номер ротора). номер ротора должен начинаться от 1 (не 0!). Все ротора должны иметь последовательные номера в порядке возрастания от 1.
+        # _F = initial_data.get((name + '.inlet.F'), np.nan)
+        # self.outlet.F = initial_data.get((name + '.outlet.F'), np.nan)
+        # # коэффициенты А - искусственные поправочные коэффициенты к характеристикам
+        # self.A_G_ncorr = initial_data.get((name + '.A_G_ncorr'), default_function(1))
+        # self.A_G_ncorr.check_parameters(self)  # TODO! подумать, как можно сделать так, чтобы объединить эту строку и выше одним методом. Т.е. предыдущая строка извлекает указатель на функцию из массива исходных данных, а эта - передает ему в качестве аргумента доп информацию - указатель на данный экземпляр класса, который заранее неизвестен.
+        # self.A_PR_ncorr = initial_data.get(name + '.A_PR_ncorr', default_function(1))
+        # self.A_PR_ncorr.check_parameters(self)
+        # self.A_eff_ncorr = initial_data.get(name + '.A_eff_ncorr', default_function(1))
+        # self.A_eff_ncorr.check_parameters(self)
+
+        # self.A_G_Re = initial_data.get((name + '.A_G_Re'), default_function(1))
+        # self.A_G_Re.check_parameters(self)
+        # self.A_PR_Re = initial_data.get((name + '.A_PR_Re'), default_function(1))
+        # self.A_PR_Re.check_parameters(self)
+        # self.A_eff_Re = initial_data.get((name + '.A_eff_Re'), default_function(1))
+        # self.A_eff_Re.check_parameters(self)
+        #
+        # # для увязки
+        # self.ident_G_value = initial_data.get(name + '.ident.G', 1.0)
+        # self.ident_PR_value = initial_data.get(name + '.ident.PR', 1.0)
+        # self.ident_eff_value = initial_data.get(name + '.ident.eff', 1.0)
+        # self.ident_n_value = initial_data.get(name + '.ident.n', 1.0)
+        #
+        # self.T_inlet_design_point = initial_data[
+        #     name + '.T_inlet_dp']  # температура на входе в расчетной точке (т.е. на режиме, на котором проводилось проектирование компрессора)
+        # self.P_inlet_design_point = initial_data[
+        #     name + '.P_inlet_dp']  # авление на входе в расчетной точке (т.е. на режиме, на котором проводилось проектирование компрессора)
+        self.rotor=int(self.rotor)
         self.name_of_n='n'+str(self.rotor)
         self.name_of_betta=name+'.betta'
         self.name_of_G_error=name+'.G'
@@ -622,17 +705,13 @@ class Compressor():
             engine.arguments[self.name_of_angle]=np.nan
             
 #        self.id=len(id_names)-1
-        self.upstream=upstream
-        self.inlet=upstream.outlet
-        self.outlet=td.CrossSection(self.name)
-        
-        _F=initial_data.get((name+'.F_inlet'),np.nan)
-        if ~np.isnan(self.inlet.F) and ~np.isnan(_F):
-            print('В узлах %s и %s конфликт площадей: %.3f и %.3f' % (self.name,self.upstream.name,_F,self.inlet.F))
-            raise SystemExit
-        elif np.isnan(self.inlet.F) and ~np.isnan(_F):
-            self.inlet.F=_F
-        self.outlet.F=initial_data.get((name+'.F_outlet'),np.nan)
+
+        # if not np.isnan(self.inlet.F) and not np.isnan(_F):
+        #     print('В узлах %s и %s конфликт площадей: %.3f и %.3f' % (self.name,self.upstream.name,_F,self.inlet.F))
+        #     raise SystemExit
+        # elif np.isnan(self.inlet.F) and not np.isnan(_F):
+        #     self.inlet.F=_F
+
         
         self.n_phys=np.nan #физические обороты ротора
         self.n_corr=np.nan#приведенные обороты ротора
@@ -647,20 +726,7 @@ class Compressor():
         if self.variable_guide_vanes == True:
             self.angle=np.nan
         self.Re=np.nan
-        #коэффициенты А - искусственные поправочные коэффициенты к характеристикам
-        self.A_G_ncorr=initial_data.get((name+'.A_G_ncorr'),default_function(1))
-        self.A_G_ncorr.check_parameters(self) #TODO! подумать, как можно сделать так, чтобы объединить эту строку и выше одним методом. Т.е. предыдущая строка извлекает указатель на функцию из массива исходных данных, а эта - передает ему в качестве аргумента доп информацию - указатель на данный экземпляр класса, который заранее неизвестен.
-        self.A_PR_ncorr=initial_data.get(name+'.A_PR_ncorr',default_function(1))
-        self.A_PR_ncorr.check_parameters(self)
-        self.A_eff_ncorr=initial_data.get(name+'.A_eff_ncorr',default_function(1))
-        self.A_eff_ncorr.check_parameters(self)
-        
-        self.A_G_Re=initial_data.get((name+'.A_G_Re'),default_function(1))
-        self.A_G_Re.check_parameters(self)
-        self.A_PR_Re=initial_data.get((name+'.A_PR_Re'),default_function(1))
-        self.A_PR_Re.check_parameters(self)
-        self.A_eff_Re=initial_data.get((name+'.A_eff_Re'),default_function(1))
-        self.A_eff_Re.check_parameters(self)
+
         
         self.A_G_ncorr_value=np.nan
         self.A_PR_ncorr_value=np.nan
@@ -669,14 +735,7 @@ class Compressor():
         self.A_PR_Re_value=np.nan
         self.A_eff_Re_value=np.nan
         
-        #для увязки
-        self.ident_G_value=initial_data.get('ident.'+name+'.G',1.0)
-        self.ident_PR_value=initial_data.get('ident.'+name+'.PR',1.0)
-        self.ident_eff_value=initial_data.get('ident.'+name+'.eff',1.0)
-        self.ident_n_value=initial_data.get('ident.'+name+'.n',1.0)
-        
-        self.T_inlet_design_point=initial_data[name+'.T_inlet_dp']#температура на входе в расчетной точке (т.е. на режиме, на котором проводилось проектирование компрессора)
-        self.P_inlet_design_point=initial_data[name+'.P_inlet_dp']#авление на входе в расчетной точке (т.е. на режиме, на котором проводилось проектирование компрессора)
+
         
          #TODO!!! Временный костыль!!! убоать! 
         if engine.name_of_engine!='GTE-170':

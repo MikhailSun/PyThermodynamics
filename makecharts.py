@@ -13,6 +13,10 @@ import numpy as np
 class Chart():
     
     def __init__(self,points_for_scatter=[],points_for_plot=[],title='',xlabel='',ylabel='',ylabel2='',xlim=np.nan,ylim=np.nan,y2lim=np.nan,figure_size=(10,6),dpi=100):
+        self.left_margin=0.05
+        self.bottom_margin=0.05
+        self.margin_between_axes=0.05
+
         self.__add_chart(points_for_scatter=points_for_scatter,points_for_plot=points_for_plot,title=title,xlabel=xlabel,ylabel=ylabel,ylabel2=ylabel2,xlim=xlim,ylim=ylim,y2lim=y2lim,figure_size=figure_size,dpi=dpi)
     def add_chart(self,points_for_scatter=[],points_for_plot=[],title='',xlabel='',ylabel='',ylabel2='',xlim=np.nan,ylim=np.nan,y2lim=np.nan):
         self.__add_chart(figure=self.figure,points_for_scatter=points_for_scatter,points_for_plot=points_for_plot,title=title,xlabel=xlabel,ylabel=ylabel,ylabel2=ylabel2,xlim=xlim,ylim=ylim,y2lim=y2lim)
@@ -24,18 +28,19 @@ class Chart():
         if figure == None:
             self.list_of_axes=[]
             self.figure=plt.figure(figsize=figure_size,dpi=dpi)
-            _axes=self.figure.add_axes([0.1, 0.1, 0.8, 0.8])
+            _axes=self.figure.add_axes([self.left_margin, self.bottom_margin, 1-self.left_margin*2, 1-self.bottom_margin*2])
             self.list_of_axes.append(_axes)        
             self.n_of_axes=len(self.list_of_axes)
         else:
             self.n_of_axes+=1
             
         if self.n_of_axes>1:
-            dH=(1-0.0*(self.n_of_axes-1)-0.1*2)/(self.n_of_axes)
-            _axes=self.figure.add_axes([0.1, 0.1, 0.8, dH])
+            dH=(1-self.margin_between_axes*(self.n_of_axes-1)-self.bottom_margin*2)/(self.n_of_axes)#высота одного графика
+            _axes=self.figure.add_axes([self.left_margin, self.bottom_margin, 1-self.left_margin*2, dH])
             self.list_of_axes.insert(0,_axes)
             for i,_ax in enumerate(self.list_of_axes):
-                _ax.set_position([0.1, 0.1+dH*i+0.05*i, 0.8, dH])
+                _ax.set_position([self.left_margin, self.bottom_margin+dH*i+self.margin_between_axes*i, 1-self.left_margin*2, dH])
+
         
 
         _axes.set_title(title)

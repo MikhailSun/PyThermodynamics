@@ -33,7 +33,8 @@ class Parser_formula():
                  '&':(-1, 2, lambda y, x: x and y),
                  '|': (-1, 2, lambda y, x: x or y),
                  }
-    FUNCTIONS = {'sqrt': lambda x: np.sqrt(x),
+    FUNCTIONS = {'abs': lambda x: np.abs(x),
+                  'sqrt': lambda x: np.sqrt(x),
                   'sin': lambda x: np.sin(x),
                   'cos': lambda x: np.cos(x),
                   'tg': lambda x: np.tan(x),
@@ -116,6 +117,8 @@ class Parser_formula():
         #op - строка с оператором
         #br - скобки
         for s in formula_string:
+            if s==' ':
+                continue
             if operator_string:
                 if s in '=!':
                     yield 'op', operator_string + s
@@ -257,7 +260,7 @@ class Parser_formula():
         if udf:
             yield 'udf', udf
         if function_thru_points:
-            yield 'udf_points', function_thru_pointsy
+            yield 'udf_points', function_thru_points
         if operator_string:
             yield 'op', operator_string
 
@@ -389,8 +392,8 @@ class Parser_formula():
                 _new_polish_formula.append(token)
         self.polish_formula=_new_polish_formula
 
-    ('str', 'compr.inlet.G')
-    ('udf', ('inlet_sigma', {'x': 'inlet.G_corr'}))
+    # ('str', 'compr.inlet.G')
+    # ('udf', ('inlet_sigma', {'x': 'inlet.G_corr'}))
 
 
 
@@ -435,7 +438,7 @@ class Parser_formula():
         for key,value in self.ARGUMENTS.items():
             if np.isnan(value):
                 solverLog.error(f'ERROR: unknown value for argument {key} in user defined formula {self.name_of_function} = {self.string_formula}')
-                raise SystemExit
+                # raise SystemExit
 
         self.temp_stack_for_calculation = []
         for token in self.polish_formula:
@@ -499,7 +502,7 @@ class Parser_formula():
             rez = float(getattr(parameter[0], parameter[1]))
             if np.isnan(rez):
                 solverLog.error(f'Error: Undefined parameter {parameter[1]}. Name of function: {self.name_of_function}, formula: {self.string_formula}')
-                raise SystemExit
+                # raise SystemExit
         return rez
 
     def calc_str(self,string):
@@ -583,6 +586,40 @@ class Parser_formula():
 # test_formula5='func_points(x)=[x=1,2,3,4;y=2.5,3,3.1,2.5;k=1;s=0;ext=0]' #scipy.interpolate.UnivariateSpline
 # test_formula6='pt.N'
 # test_formula7='True'
+# f1='control_law_TturbOut_by_Th(T)=[x=253.15,263.15,268.15,273.15,278.15,283.15,288.15,293.15,303.15,313.15;y=808.17,809.7,811.1,812.77,815.0,817.17,819.9,823.0,830.17,838.77;k=2;ext=3]'
+# f2='residual_by_ComprAngle_minus30(a)=(a<=-30)?((a+30)/-30):0'
+# f3='residual_by_ComprAngle_plus3(a)=(a>=3)?((a-3)/3):0'
+# f4='residual_by_TturbOut(Comprangle,Th,Tturbout)=(Comprangle<3&Comprangle>-30)?((control_law_TturbOut_by_Th(T=Th)-Tturbout)/Th):0'
+# f5='control_law(Comprangle,Th,Tturbout)=residual_by_ComprAngle_minus30(a=Comprangle)+residual_by_ComprAngle_plus3(a=Comprangle)+residual_by_TturbOut(Comprangle=Comprangle,Th=Th,Tturbout=Tturbout)'
+#
+# l1=Parser_formula()
+# l1.prepare_formula(f1)
+# l2=Parser_formula()
+# l2.prepare_formula(f2)
+# l3=Parser_formula()
+# l3.prepare_formula(f3)
+# l4=Parser_formula()
+# l4.prepare_formula(f4)
+# l5=Parser_formula()
+# l5.prepare_formula(f5)
+#
+# Th=273.15; Tout=812.77;
+# a=4
+#
+# l1.insert_values_in_arguments(T=Th)
+# l2.insert_values_in_arguments(a=a)
+# l3.insert_values_in_arguments(a=a)
+# l4.insert_values_in_arguments(Comprangle=a,Th=Th,Tturbout=Tout)
+# l5.insert_values_in_arguments(Comprangle=a,Th=Th,Tturbout=Tout)
+# print(l1.calculate())
+# print(l2.calculate())
+# print(l3.calculate())
+# print(l4.calculate())
+# print(l5.calculate())
+
+
+
+
 
 # d=Parser_formula() #задаем через параметр a ссылку на базовые объект откуда будут извлекаться все параметры
 # d.prepare_formula(test_formula) #задаем строку с формулой

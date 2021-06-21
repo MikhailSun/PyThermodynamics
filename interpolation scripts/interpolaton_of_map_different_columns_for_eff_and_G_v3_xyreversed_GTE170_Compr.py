@@ -58,6 +58,7 @@ import datetime
 import os
 from scipy.spatial.transform import Rotation
 
+directory_to_save_pics="/plots/"
 
 #3.6) модифицируем класс для построения сплайна Акимы таким образом, чтобы на концах сплайна кривая экстраполировалась по касательной    
 class Akima1DInterpolatorModified(Akima1DInterpolator):
@@ -141,7 +142,7 @@ date_text=now.strftime("%Y-%m-%d %H_%M")
 # type_of_map="turbine" #!!!
 type_of_map="compressor" #!!!
 # name_of_file="turbine_jetcat_CFD_map_Kosmatov_Alexander_2019_12_reduced.csv"#!!!указать файл
-name_of_file="2020 11 аэродинамические характеристики компрессора ГТЭ-170 по результатам CFD\AC CFD 2020 11 A-3.csv"#!!!указать файл
+name_of_file="2020 11 аэродинамические характеристики компрессора ГТЭ-170 по результатам CFD\AC CFD 2020 11 A+3.csv"#!!!указать файл
 # name_of_file="2020 11 аэродинамические характеристики компрессора ГТЭ-170 по результатам CFD\AC CFD 2020 11 A-16.8.csv"#!!!указать файл
 # name_of_file="turbine_jetcat_CFD_map_Kosmatov_Alexander_2019_12_reduced.csv"
 #1)импорт данных
@@ -331,6 +332,7 @@ for _i_color in zip(np.linspace(-0.5, 1.5, 9),colors):
     y_betta=BettaCurve(i)(x)
     _fig.figure.axes[0].plot(x,y_betta,'--r',label='Betta='+str(i),color=color)
     _fig.figure.axes[0].legend()
+
 
 
 #4) сформируем векторы G_output, PR_output и Eff_output, где каждый элемент вектора- функция зависимости соответствующего параметра от бетта при различных значениях оборотов из вектора rotations
@@ -961,6 +963,7 @@ for ind,ni_color in enumerate(zip(rotations,colors)):#проходимся по 
         _fig2.add_chart(points_for_scatter=[{'y':PR_temp,'x':G_temp}],points_for_plot=[{'y':PRRR,'x':GGG}],title='PR rel=f(G rel). {} {}'.format('ветка n=',ni),xlabel='G rel',ylabel='PR rel')
         _fig2.add_chart(points_for_scatter=[{'y':Eff_temp,'x':G_temp}],points_for_plot=[{'y':Efff,'x':GGG}],title='Eff rel=f(G rel). {} {}'.format('ветка n=',ni),xlabel='G rel',ylabel='Eff rel')
         _fig2.add_chart(points_for_scatter=[{'y':Eff_temp,'x':PR_temp}],points_for_plot=[{'y':Efff,'x':PRRR}],title='Eff rel=f(PR rel). {} {}'.format('ветка n=',ni),xlabel='PR rel',ylabel='Eff rel',ylim=[0.2,max_Eff*1.1])
+        _fig2.figure.savefig("test.jpg")
 #то же самое в абс координатах
         points_for_scatter2=[{'x':Betta_temp,'y':G_temp_abs,'label':'G','c':'green'},
                             {'x':Betta_temp,'y':PR_temp_abs,'label':'PR','c':'red'},

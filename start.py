@@ -32,12 +32,15 @@ Model0=eng.Engine(filename_of_input_data='input_data_GTE170.dat') #исходн�
 # ident_coefs={'ident.compr.G': 0.93, 'ident.compr.n': 1.025}
 # Model0.update_ident_coefs(ident_coefs)
 # parametric_study_rezults=Model0.parametric_study({'hpt.ident_Cap_value':[0.95,0.975,1,1.02,1.04,1.06,1.08,1.1]}, {'ident.SAS.3':[1.0,1.1,1.2,1.3,1.4,1.5,1.6,1.7,1.8]})
-rezults=Model0.solve_modes()
+try:
+    rezults=Model0.solve_static_modes()
 
-Model0.save_rezults_to_file(rezults_data=rezults,filename_where_to_save='rezults.csv')
-Model0.make_graphics()
-# Model0.make_graphics_of_maps(rezults)
-solverLog.info('Writing rezults: ok')
+    Model0.save_rezults_to_file(rezults_data=rezults,filename_where_to_save='results_thermodynamics.csv')
+    Model0.make_graphics()
+    # Model0.make_graphics_of_maps(rezults)
+    solverLog.info('Writing rezults: ok')
+except:
+    Model0.make_graphics()
 
 # print(f'N={rezults[0].pt.N*1.3596/1000} (2800)')
 # print(f'Tztk={rezults[0].hpt.throttle.T} (1448)')
