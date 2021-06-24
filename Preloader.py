@@ -87,8 +87,14 @@ class Preloader():
                 if self.currentSectionName == "Parameters":
                     _obj=prs.Parser_formula()
                     _obj.prepare_RHS_of_formula(a[1].split('#',1)[0].strip())
-                    if len(_obj.polish_formula)==1 and (_obj.polish_formula[0][0]=='bool' or _obj.polish_formula[0][0]=='num'):
+                    # _obj=_obj.calculate()
+                    if len(_obj.polish_formula)==1 and (_obj.polish_formula[0][0] in ('bool','num','none')):
                         _obj=_obj.calculate()
+                    # if len(_obj.polish_formula) == 1:
+                    #     if (_obj.polish_formula[0][0] == 'bool' or _obj.polish_formula[0][0] == 'num'):
+                    #         _obj = _obj.calculate()
+                    #     elif _obj.polish_formula[0][0] == 'udf'
+
                     initialData[var_name] = _obj
                 if self.currentSectionName == "Composition_of_inlet_gas":
                     initialData[var_name] = np.array(var_val)

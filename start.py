@@ -38,6 +38,7 @@ try:
     Model0.save_rezults_to_file(rezults_data=rezults,filename_where_to_save='results_thermodynamics.csv')
     Model0.make_graphics()
     # Model0.make_graphics_of_maps(rezults)
+    solverLog.info(Model0.df)
     solverLog.info('Writing rezults: ok')
 except:
     Model0.make_graphics()

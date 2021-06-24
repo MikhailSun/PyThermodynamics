@@ -123,6 +123,7 @@ class Engine():
     monitors = pd.DataFrame(columns=parameters_to_monitor)  # тут будем храниить значеия тех переменных изменение которых хотим мониторить в процессе расчета
     user_defined_formulas=Parser.Parser_formula.USER_DEFINED_FUNCTIONS
 
+
     def __init__(self,filename_of_input_data=''):
 
         self.time_before_init=datetime.datetime.now()
@@ -159,8 +160,8 @@ class Engine():
         pl.Preloader(model_filename, Engine.initial_data) #здесь идет предварительная обработка данных заданных пользователем через файл модели, не input_data!!!. Эти данные заносятся в массив initial_data, который подается на вход в initial_dat
         self.read_modes_from_input_data() #имя файла input_data передавать необязательно, но если оно передано, то у него наивысший приоритет - именно из него будут взяты данные, если не задано, то дальше будут проверяться параметры в строке при запуске через cmd, если и там пусто, то файла будет искать автоматически в рабочей директории - см.метод read_input_data
         # Parser.Parser_formula.BASE_LINK_TO_EXTRACT=self #задаем базовую ссылку на объект двигателя по которой нужно будет находить параметры в формулах
+        Engine.rezults_hint = Engine.initial_data['Rezults']  # здесь будут храниться данные о том, какие результаты выводить в конечный файл
 
-        self.rezults_data=Engine.initial_data['Rezults'] #здесь будут храниться данные о том, какие результаты выводить в конечный файл
         self.name_of_engine=Engine.initial_data['name']
 
         self.solvecontrol_use_variables_from_previus_iteration_as_first_estimate=True #штука, которая позволяет при ррасчете нескольких режимов использовать в качестве первоначальных приближений значения variables из предыдущего расчета
@@ -1028,7 +1029,10 @@ class Engine():
     def data_to_table2(self,Name='',Value='',Dimension='',round_to=6): #nоже самое, только value - это список
         list_of_values=[]
         for val in Value:
-            list_of_values.append(round(float(val),round_to))
+            if not isinstance(val, float) or np.isnan(val):
+                list_of_values.append(val)
+            else:
+                list_of_values.append(round(float(val),round_to))
         if self.df.empty:
             ind=0
         else:
@@ -1039,34 +1043,49 @@ class Engine():
     def save_rezults_to_file(self,rezults_data=np.nan,filename_where_to_save=''):
         #TODO! продумать возможность вывода в результаты значений формул пользователя из входного файла
         if isinstance(rezults_data, Engine):
-            if not hasattr(self,'df'):
-                self.df = pd.DataFrame(columns=['Name','Dimension','Value'])
-            for rezult_data in self.rezults_data:
-                p = Parser.Parser(rezults_data)
-                p.parse(self.rezults_data[rezult_data][0])
-                val=p.calculate()
-                self.data_to_table(Name=rezult_data,Value=val,Dimension=self.rezults_data[rezult_data][1])
-            self.df.to_csv(filename_where_to_save)
+            if not hasattr(Engine,'df'):
+                Engine.df = pd.DataFrame(columns=['Name','Dimension','Value'])
+            for hint in Engine.rezults_hint:
+                # p = Parser.Parser(rezults_data)
+                # p.parse(Engine.rezults_hint[hint][0])
+                # val=p.calculate()
+                p=Parser.Parser_formula(link_to_extract=rezults_data)
+                p.prepare_RHS_of_formula(Engine.rezults_hint[hint][0])
+                val=p()
+                self.data_to_table(Name=hint, Value=val, Dimension=Engine.rezults_hint[hint][1])
+            Engine.df.to_csv(filename_where_to_save)
         elif isinstance(rezults_data, list):
             names_of_modes=[]
             for i in np.arange(1,len(rezults_data)+1):
                 names_of_modes.append('mode '+str(i))
-            if not hasattr(self,'df'):
+            if not hasattr(Engine,'df'):
                 columns=['Name','Dimension']
                 columns=columns+names_of_modes
-                self.df = pd.DataFrame(columns=columns)
-            for name,formula_and_dimension in self.rezults_data.items():
+                Engine.df = pd.DataFrame(columns=columns)
+            for name,formula_and_dimension in Engine.rezults_hint.items():
                 _name=name
                 _dimension=formula_and_dimension[1]
                 _formula=formula_and_dimension[0] #TODO!!! ввести проверку на то, что формула вычисляема! иначе прога вылетает, а в логах не пишется почему
                 _values=[]
                 for rezult in rezults_data:
-                    p = Parser.Parser(rezult)
-                    p.parse(_formula)
-                    val=p.calculate()
-                    _values.append(val)
+                    # p = Parser.Parser(rezult)
+                    # p.parse(_formula)
+                    # val=p.calculate()
+                    p = Parser.Parser_formula(link_to_extract=rezult)
+                    p.prepare_RHS_of_formula(_formula)
+                    try:
+                        val = p.calculate()
+                        if isinstance(val,str):
+                            _values.append(np.nan)
+                            solverLog.warning(f'Warning! Uncalculable parameter in table of results: parameter={name}, formula={formula_and_dimension}')
+                        else:
+                            _values.append(val)
+                    except:
+                        solverLog.warning(f'Warning! Uncalculable parameter in table of results: parameter={name}, formula={formula_and_dimension}')
+                        _values.append(np.nan)
+                        pass
                 self.data_to_table2(Name=_name,Value=_values,Dimension=_dimension)
-            self.df.to_csv(filename_where_to_save)
+            Engine.df.to_csv(filename_where_to_save)
 
 
 
@@ -1126,7 +1145,7 @@ class Engine():
 
 # Model0.update_ident_coefs(ident_coefs)
 # rezults=Model0.solve_modes()
-# Model0.save_rezults_to_file(rezults_data=rezults[-1],filename_where_to_save='test.csv')
+# Model0.save_rezults_to_file(rezults_hint=rezults[-1],filename_where_to_save='test.csv')
 # Model0.make_graphics()
 # Model0.make_graphics_of_maps()
 

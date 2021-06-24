@@ -54,24 +54,28 @@ class Parser_formula():
     #тут будут храниться функции, задаваемые пользователем
     USER_DEFINED_FUNCTIONS={}
     #возможные типы данных, которые может парсить этот парсер: число, пользовательская функция, стандартная функция, математический оператор, аругмент пользовательской функции, параметр объекта, скобки, строка (под строкой подразумевается промежуточный тип данных, т.е. он хранит информацию на объект, откуда нужно будет взять данные, но этого объекта на момент создания строки еще нет, поэтому эту строку нельзя преобразовать в ссылку на объект)
-    POSSIBLE_TYPES=frozenset(['num','udf','udf_points','st_fun','op','arg','par','br','bool','str'])
+    POSSIBLE_TYPES=frozenset(['num','none','udf','udf_points','st_fun','op','arg','par','br','bool','str'])
     BASE_LINK_TO_EXTRACT=None
 
     def __init__(self,link_to_extract=None):
-        if link_to_extract == None:
-            self.base_link_to_extract = Parser_formula.BASE_LINK_TO_EXTRACT
-        else:
-            self.base_link_to_extract = link_to_extract
+        if not link_to_extract is None:
+            # self.base_link_to_extract = Parser_formula.BASE_LINK_TO_EXTRACT
+            Parser_formula.BASE_LINK_TO_EXTRACT = link_to_extract
+        # else:
+        #     self.base_link_to_extract = link_to_extract
+
         self.name_of_function=np.nan #тут будем хранить имя функции
         self.string_formula=np.nan #текстовая формула в человеческом виде
-        if self.base_link_to_extract==False:
+        if Parser_formula.BASE_LINK_TO_EXTRACT is None:
             solverLog.error('ERROR: Parser_formula did not get link_to_extract')
             raise SystemExit
         self.polish_formula=[] #вычисляемая формула в польской записи
+        self.flag_calculable_formula=True #флаг который будет обозначать возможно ли вычислить формулу, т.е. достаточно ли всех исходных данных. Если недостаточно, то формула будет хранитсья только в виде польской нотации
         self.temp_stack_for_calculation=[]#тут будет храниться стек используемый для вычисления формулы в польской записи, если все правильно посчитано, то в стеке будет одно значение - результат вычисления
         self.ARGUMENTS={} #словарь имен аргументов, используемых в функции. Здесь ключ - имя аргумента, значение - ссылка на объект откуда нузно брать числовое значение
         # тут будем хранить направлятор на методы, которые знают как обращаться с разными типами данных
         self.CALC_METHODS = {'num': self.calc_numb,
+                             'none': self.calc_numb,
                         'udf': self.calc_udf,
                         'st_fun': self.calc_st_fun,
                         'op': self.calc_op,
@@ -91,11 +95,12 @@ class Parser_formula():
             if arg:
                 self.ARGUMENTS[arg]=np.array(np.nan)
         Parser_formula.USER_DEFINED_FUNCTIONS[self.name_of_function] = self #сохраняем готовую для расчета формулу в словарь класса
-        self.string_formula = RHS
+        # self.string_formula = RHS
         self.prepare_RHS_of_formula(RHS)
         return {self.name_of_function:self} #и возвращаем наружу на всякий случай
 
     def prepare_RHS_of_formula(self,RHS):#этот метод вызывается в разделе, где формулы задаются для параметров, т.е. у формул нет имени и аргументов
+        self.string_formula = RHS
         self.shunting_yard(self.parse_string_to_generator(RHS)) #сохраняем формулу в виде польской нотации в self.polish_formula
 
     #Генератор, получает на вход строку, возвращает числа в формате float, операторы и скобки в формате символов или ссылки/параметры в виде текстовой строки.
@@ -253,6 +258,10 @@ class Parser_formula():
                 yield 'bool',True
             elif string_parameter=='False':
                 yield 'bool',False
+            elif string_parameter in ('nan','NaN','np.nan'):
+                yield 'num', np.nan
+            elif string_parameter in ('none', 'None'):
+                yield 'none', None
             else:
                 yield 'str', string_parameter
                 # solverLog.error(f"Error: formula {self.string_formula} has unknown object '{string_parameter}'")
@@ -402,7 +411,7 @@ class Parser_formula():
     def str2link(self,string):
         if isinstance(string,tuple): #если кортеж - в нем ссылка на параметр - возвращаем число
             return self.calc_par(string)
-        elif self.is_number(string): #если в строке число в текстовом виде, то переводим ее во float
+        elif self.is_number(string): #если в строке число в текстовом виде или в виде ndarray, то переводим ее во float
             return float(string)
         elif string in self.ARGUMENTS.keys(): #если в строке имя аргумента к функции, то возвращаем значение этого аргумента из массива self.ARGUMENTS
             # есть проблема с такой штукой: 1) есть функ1(x,y)=x+y 2) есть функ2(z)=функ1(х=2y=z) 3) проблема в том, что при попытке присвоить аргументу функ1 значение аргумента z функ2 непонятно как передать ссылка на z
@@ -412,9 +421,14 @@ class Parser_formula():
             broken_string = string.split('.')
             for val in broken_string[:-1]:
                 rez=getattr(rez,val)
+            return (rez, broken_string[-1])
+            # for val in broken_string:
+            #     rez=getattr(rez,val)
+
+            # return rez
         else:
             return string
-        return (rez,broken_string[-1])
+
 
     def is_number(self,s):
         try:
@@ -442,20 +456,32 @@ class Parser_formula():
 
         self.temp_stack_for_calculation = []
         for token in self.polish_formula:
-            self.temp_stack_for_calculation.append(self.CALC_METHODS[token[0]](token[1]))
+            calculated_value=self.CALC_METHODS[token[0]](token[1])
+            self.temp_stack_for_calculation.append(calculated_value)
         return self.temp_stack_for_calculation[0] # результат вычисления - единственный элемент в стеке
+
+    def __call__(self, *args, **kwargs):
+        return self.calculate()
 
 
     def insert_values_in_arguments(self,**dict_of_values):
         for arg,value in dict_of_values.items():
             if arg in self.ARGUMENTS.keys():
-                temp_val=self.str2link(value)
-                if isinstance(temp_val,str):
+                decoded_value=self.str2link(value)
+                # if isinstance(decoded_value,str):
+                #     if decoded_value==value:
+                #         return False #сигнализируем о том, что аргумент невозможно вычислить
+                if isinstance(decoded_value,str):
                     self.ARGUMENTS[arg].itemset(self.calc_par(value))
+                elif isinstance(decoded_value,tuple):
+                    self.ARGUMENTS[arg].itemset(self.str2link(decoded_value))
+                elif isinstance(decoded_value,float):
+                    self.ARGUMENTS[arg].itemset(decoded_value)
                 else:
-                    self.ARGUMENTS[arg].itemset(self.str2link(temp_val))
+                    solverLog.error(f'Error! Something wrong in function insert_values_in_arguments: undefined type of decoded_value: {type(decoded_value)}')
             else:
-                solverLog.error(f'ERROR: unknown name of argument {arg} in attempt to insert value {value} in formula {self.name_of_function} = {self.string_formula}')
+                solverLog.error(f'ERROR: unknown name of argument {arg} in attempt to insert value {value} in formula: {self.name_of_function} = {self.string_formula}')
+        return True #сигнализируем о том, что все аргументы вычислены
 
     def calc_numb(self,number):
         return number
@@ -470,6 +496,7 @@ class Parser_formula():
         # print(f'calc_udf: {name_and_args}')
         udf.insert_values_in_arguments(**name_and_args[1])
         rez= udf.calculate()
+        #сбрасываем значения аргументтов, так как больше они не нужны, а в дальнейшем при обращении к этой функции они д.б. чистыми, чтобы заполнить их заново
         for key in udf.ARGUMENTS.keys():
             udf.ARGUMENTS[key].itemset(np.nan)
         return rez
@@ -497,9 +524,17 @@ class Parser_formula():
             rez=Parser_formula.BASE_LINK_TO_EXTRACT
             broken_string = parameter.split('.')
             for val in broken_string:
-                rez=getattr(rez,val)
+                if hasattr(rez,val):
+                    rez=getattr(rez,val)
+                else:
+                    rez=parameter
+                    break
         else:
-            rez = float(getattr(parameter[0], parameter[1]))
+            _rez=getattr(parameter[0], parameter[1])
+            if isinstance(_rez,Parser_formula):
+                rez = float(_rez())
+            else:
+                rez= float(_rez)
             if np.isnan(rez):
                 solverLog.error(f'Error: Undefined parameter {parameter[1]}. Name of function: {self.name_of_function}, formula: {self.string_formula}')
                 # raise SystemExit
@@ -554,10 +589,10 @@ class Parser_formula():
 #4) calculate() - считаем формулу, на выходе д.б. float
 
 
-# class test1():
-#     def __init__(self):
-#         self.devices = dict()
-#         self.air_bleed_out = [{'G_abs_from': 3}, 2, 3]
+class test_obj():
+    def __init__(self):
+        self.devices = dict()
+        self.air_bleed_out = [{'G_abs_from': 3}, 2, 3]
 # #
 # class test2():
 #     def __init__(self):
@@ -577,8 +612,29 @@ class Parser_formula():
 # a.x=1
 # a.y=1
 #
-#
-#
+# a=test_obj()
+# a.inl=test_obj()
+# a.inl.inlet=test_obj()
+# # a.FF=2
+# # a.inl.inlet.F=float(123)
+# Parser_formula.BASE_LINK_TO_EXTRACT=a
+# test0="test_formula(F)=F*2"
+# # test1='1'
+# test2='test_formula(F=FF)+2+3'
+# test3='1'
+# l1=Parser_formula()
+# l1.prepare_formula(test0)
+# # l1.check_undefined_parameters_and_udf_arguments()
+# # l2=Parser_formula()
+# # l2.prepare_RHS_of_formula(test1)
+# # l2.check_undefined_parameters_and_udf_arguments()
+# l3=Parser_formula()
+# l3.prepare_RHS_of_formula(test3)
+# # l3.check_undefined_parameters_and_udf_arguments()
+# rez=l3.calculate()
+# print(rez)
+# print('lsdfh')
+# #
 # test_formula='analitical_fun(a,b)=a/b' #1-pt.N_-(-pt.N_offtake*-cos(1+0.57))/(pt.Eff_mech_value+300+ln(20))/1000+
 # test_formula2='function2(aa,bb,cc,dd)=func_points(x=aa)+func_points(x=bb)+analitical_fun(a=cc,b=dd)' #x+y/z*(-tg(0.8925))+sin(rad(30))+function(x_=4,y_=pt.test)+
 # test_formula4='test_function(z)=2>1?2>3:3<2'

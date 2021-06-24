@@ -47,6 +47,46 @@ def set_address(obj, address_to_attr, value):
             obj = getattr(obj, key)
     setattr(obj,keys[-1],value)
 
+def is_value_exist(value):
+    if isinstance(value,bool):
+        return not value is None
+    elif isinstance(value,float):
+        return not np.isnan(value)
+    elif isinstance(value,int):
+        return not value in None
+    elif isinstance(value,str):
+        return value!=''
+    elif isinstance(value,Parser.Parser_formula):
+        return True
+
+def initialize_parameters(link_to_class,link_to_object,initial_data):
+    name=link_to_object.name
+    for key in link_to_class.parameters.keys():
+        new_value = initial_data.get((name + '.' + key),link_to_class.parameters[key][1])
+
+        old_value = has_address(link_to_object, key)
+        if old_value[0] and not np.isnan(old_value[1]):
+            name_of_parameter = name + '.' + key
+            solverLog.info(
+                f'Error! Parameters conflict in device "{link_to_object.name}". Parameter "{name_of_parameter}"={new_value} conflicts with old value = {old_value[1]}.')
+            raise SystemExit
+
+        # если значение может быть функцией, то сохраняем его в виде объета parser_formula
+        if link_to_class.parameters[key][3]:  # если параметр можно задавать формулой
+            if isinstance(new_value,Parser.Parser_formula):
+                set_address(link_to_object, key, new_value)
+            else:
+                formula_object = Parser.Parser_formula()
+                formula_object.prepare_RHS_of_formula(str(new_value))
+                set_address(link_to_object, key, formula_object)
+        else:
+            set_address(link_to_object, key, new_value)
+
+        if link_to_class.parameters[key][2] and not is_value_exist(new_value): #если параметр задавать обязательно
+            name_of_parameter = name + '.' + key
+            solverLog.error(f'Error! Undefined parameter "{name_of_parameter}". You can set default value = {link_to_class.parameters[key][1]}')
+            # raise SystemExit
+
 #класс для описания всех параметров в сечении потока
 """
 class CrossSection():
@@ -616,28 +656,33 @@ class default_function():
         return self.rezult
     def check_parameters(self,device):
         pass
+
+# default_1=Parser.Parser_formula()
+# default_1.prepare_RHS_of_formula()
+
     
             
 #КЛАССЫ УЗЛОВ ДВИГАТЕЛЯ
 
 class Compressor():
-    #перечисление всех возможных параметров узла в следующем формате: dict('краткое_обозначение_в_коде':('полное_обозначение',значение_по_умолчанию,обязательно_ли_задавать_в_исходных_данных),...)
-    parameters={'variable_guide_vanes':('наличие регулируемых направляющих аппаратов',False,False),
-                'rotor':('номер ротора',np.nan,True), #номер ротора (этот номер должен быть согласован с другими узлами ГТД на этом же роторе, т.е. узлы (турбина) на одном роторе имеют один номер ротора). номер ротора должен начинаться от 1 (не 0!). Все ротора должны иметь последовательные номера в порядке возрастания от 1.
-                'inlet.F':('площадь сечения на входе', np.nan,False),
-                'outlet.F': ('площадь сечения на выходе', np.nan, False),
-                'A_G_ncorr': ('поправка к характеристике компрессора по расходу в зависимости от приведенных оборотов', np.nan, False),
-                'A_PR_ncorr': ('поправка к характеристике компрессора по степени повышения давления в зависимости от приведенных оборотов', np.nan, False),
-                'A_eff_ncorr': ('поправка к характеристике компрессора по кпд в зависимости от приведенных оборотов', np.nan, False),
-                'A_G_Re': ('поправка к характеристике компрессора по расходу в зависимости от числа Рейнольдса', np.nan, False),
-                'A_PR_Re': ('поправка к характеристике компрессора по степени повышения давления в зависимости от числа Рейнольдса', np.nan, False),
-                'A_eff_Re': ('поправка к характеристике компрессора по кпд в зависимости от числа Рейнольдса', np.nan, False),
-                'ident.G': ('коэффициент увязки к характеристике компрессора по расходу', 1.0, False),
-                'ident.PR': ('коэффициент увязки к характеристике компрессора по степени повышения давления', 1.0, False),
-                'ident.eff': ('коэффициент увязки к характеристике компрессора по кпд', 1.0, False),
-                'ident.n': ('коэффициент увязки к характеристике компрессора по оборотам', 1.0, False),
-                'T_inlet_design_point': ('поправка к характеристике компрессора по кпд в зависимости от числа Рейнольдса', 288.15, False),
-                'P_inlet_design_point': ('поправка к характеристике компрессора по кпд в зависимости от числа Рейнольдса', 101325, False),
+    #перечисление всех возможных параметров узла в следующем формате:
+    # dict('краткое_обозначение_в_коде':('полное_обозначение', значение_по_умолчанию, обязательно_ли_задавать_в_исходных_данных, может_ли_быть_значение_задано_функцией, тип_данных_которые_должен_ввести_пользователь))
+    parameters={'variable_guide_vanes':('наличие регулируемых направляющих аппаратов',False,False,False,bool),
+                'rotor':('номер ротора',None,True,False,int), #номер ротора (этот номер должен быть согласован с другими узлами ГТД на этом же роторе, т.е. узлы (турбина) на одном роторе имеют один номер ротора). номер ротора должен начинаться от 1 (не 0!). Все ротора должны иметь последовательные номера в порядке возрастания от 1.
+                'inlet.F':('площадь сечения на входе', np.nan,False,False,float),
+                'outlet.F': ('площадь сечения на выходе', np.nan, False,False,float),
+                'A_G_ncorr': ('поправка к характеристике компрессора по расходу в зависимости от приведенных оборотов', 1.0, False,True,str),
+                'A_PR_ncorr': ('поправка к характеристике компрессора по степени повышения давления в зависимости от приведенных оборотов', 1.0, False,True,str),
+                'A_eff_ncorr': ('поправка к характеристике компрессора по кпд в зависимости от приведенных оборотов', 1.0, False,True,str),
+                'A_G_Re': ('поправка к характеристике компрессора по расходу в зависимости от числа Рейнольдса', 1.0, False,True,str),
+                'A_PR_Re': ('поправка к характеристике компрессора по степени повышения давления в зависимости от числа Рейнольдса', 1.0, False,True, str),
+                'A_eff_Re': ('поправка к характеристике компрессора по кпд в зависимости от числа Рейнольдса', 1.0, False,True, str),
+                'ident_G': ('коэффициент увязки к характеристике компрессора по расходу', 1.0, False,False,float),
+                'ident_PR': ('коэффициент увязки к характеристике компрессора по степени повышения давления', 1.0, False,False,float),
+                'ident_eff': ('коэффициент увязки к характеристике компрессора по кпд', 1.0, False,False,float),
+                'ident_n': ('коэффициент увязки к характеристике компрессора по оборотам', 1.0, False,False,float),
+                'T_inlet_design_point': ('температура воздуха на входе в расчетной точке компрессора', 288.15, False,False,float),
+                'P_inlet_design_point': ('давление воздуха на входе в расчетной точке', 101325, False,False,float),
                 }
 
     def __init__(self, initial_data, upstream, engine, name):
@@ -645,53 +690,31 @@ class Compressor():
         self.upstream=upstream
         self.inlet=upstream.outlet
         self.outlet=td.CrossSection(self.name)
-
         engine.devices[name] = self
-        for key in Compressor.parameters.keys():
-            #тут нужно сделать возможность задавать значение new_value функцией из того, что задал пользователь
-            #откуда initial_data знает уже что там находистя объект parser_formula?
-            data_from_file=initial_data.get((name + '.' + key), np.nan)
-            new_value = initial_data.get((name + '.' + key), np.nan)
 
-            if not np.isnan(new_value):
-                old_value=has_address(self, key)
-                if old_value[0] and not np.isnan(old_value[1]):
-                    name_of_parameter = name + '.' + key
-                    solverLog.info(f'Error! Parameters conflict in device "{self.name}". Parameter "{name_of_parameter}"={new_value} conflicts with old value = {old_value[1]}.')
-                    raise SystemExit
+        initialize_parameters(Compressor, self, initial_data)
+        # for key in Compressor.parameters.keys():
+        #     new_value = initial_data.get((name + '.' + key), Compressor.parameters[key][1])
+        #     if is_value_exist(new_value):
+        #         #проверяем, что имя параметра, куда мы хотим записать новое значение не занято кем-то
+        #         old_value=has_address(self, key)
+        #         if old_value[0] and not np.isnan(old_value[1]):
+        #             name_of_parameter = name + '.' + key
+        #             solverLog.info(f'Error! Parameters conflict in device "{self.name}". Parameter "{name_of_parameter}"={new_value} conflicts with old value = {old_value[1]}.')
+        #             raise SystemExit
+        #         #если значение может быть функцией, то сохраняем его в виде объета parser_formula
+        #         if Compressor.parameters[key][3]:
+        #             formula_object=Parser.Parser_formula()
+        #             formula_object.prepare_RHS_of_formula(str(new_value))
+        #             set_address(self, key, formula_object)
+        #         else:
+        #             set_address(self, key, new_value)
+        #     else:
+        #         if Compressor.parameters[key][2]:
+        #             name_of_parameter=name+'.'+key
+        #             solverLog.error(f'Error! Undefined parameter "{name_of_parameter}". You can set default value = {Compressor.parameters[key][1]}')
+        #             # raise SystemExit
 
-                set_address(self, key, new_value)
-
-
-        # self.variable_guide_vanes=initial_data.get((name+'.variable_guide_vanes'),False) #параметр, который говорит о том, будут ли использоваться поворотные направляющие аппараты. Если да, то алгоритм ожидает дополнительный варьируемый параметр - угол поворота НА и несколько характеристик компрессора, соответствующих различным углам НА
-        # self.rotor=int(initial_data[name+'.rotor']) #номер ротора (этот номер должен быть согласован с другими узлами ГТД на этом же роторе, т.е. узлы (турбина) на одном роторе имеют один номер ротора). номер ротора должен начинаться от 1 (не 0!). Все ротора должны иметь последовательные номера в порядке возрастания от 1.
-        # _F = initial_data.get((name + '.inlet.F'), np.nan)
-        # self.outlet.F = initial_data.get((name + '.outlet.F'), np.nan)
-        # # коэффициенты А - искусственные поправочные коэффициенты к характеристикам
-        # self.A_G_ncorr = initial_data.get((name + '.A_G_ncorr'), default_function(1))
-        # self.A_G_ncorr.check_parameters(self)  # TODO! подумать, как можно сделать так, чтобы объединить эту строку и выше одним методом. Т.е. предыдущая строка извлекает указатель на функцию из массива исходных данных, а эта - передает ему в качестве аргумента доп информацию - указатель на данный экземпляр класса, который заранее неизвестен.
-        # self.A_PR_ncorr = initial_data.get(name + '.A_PR_ncorr', default_function(1))
-        # self.A_PR_ncorr.check_parameters(self)
-        # self.A_eff_ncorr = initial_data.get(name + '.A_eff_ncorr', default_function(1))
-        # self.A_eff_ncorr.check_parameters(self)
-
-        # self.A_G_Re = initial_data.get((name + '.A_G_Re'), default_function(1))
-        # self.A_G_Re.check_parameters(self)
-        # self.A_PR_Re = initial_data.get((name + '.A_PR_Re'), default_function(1))
-        # self.A_PR_Re.check_parameters(self)
-        # self.A_eff_Re = initial_data.get((name + '.A_eff_Re'), default_function(1))
-        # self.A_eff_Re.check_parameters(self)
-        #
-        # # для увязки
-        # self.ident_G_value = initial_data.get(name + '.ident.G', 1.0)
-        # self.ident_PR_value = initial_data.get(name + '.ident.PR', 1.0)
-        # self.ident_eff_value = initial_data.get(name + '.ident.eff', 1.0)
-        # self.ident_n_value = initial_data.get(name + '.ident.n', 1.0)
-        #
-        # self.T_inlet_design_point = initial_data[
-        #     name + '.T_inlet_dp']  # температура на входе в расчетной точке (т.е. на режиме, на котором проводилось проектирование компрессора)
-        # self.P_inlet_design_point = initial_data[
-        #     name + '.P_inlet_dp']  # авление на входе в расчетной точке (т.е. на режиме, на котором проводилось проектирование компрессора)
         self.rotor=int(self.rotor)
         self.name_of_n='n'+str(self.rotor)
         self.name_of_betta=name+'.betta'
@@ -703,16 +726,7 @@ class Compressor():
 
         if self.variable_guide_vanes==True:
             engine.arguments[self.name_of_angle]=np.nan
-            
-#        self.id=len(id_names)-1
 
-        # if not np.isnan(self.inlet.F) and not np.isnan(_F):
-        #     print('В узлах %s и %s конфликт площадей: %.3f и %.3f' % (self.name,self.upstream.name,_F,self.inlet.F))
-        #     raise SystemExit
-        # elif np.isnan(self.inlet.F) and not np.isnan(_F):
-        #     self.inlet.F=_F
-
-        
         self.n_phys=np.nan #физические обороты ротора
         self.n_corr=np.nan#приведенные обороты ротора
         self.PRtt=np.nan#степень повышения полного давления
@@ -727,16 +741,13 @@ class Compressor():
             self.angle=np.nan
         self.Re=np.nan
 
-        
         self.A_G_ncorr_value=np.nan
         self.A_PR_ncorr_value=np.nan
         self.A_eff_ncorr_value=np.nan
         self.A_G_Re_value=np.nan
         self.A_PR_Re_value=np.nan
         self.A_eff_Re_value=np.nan
-        
 
-        
          #TODO!!! Временный костыль!!! убоать! 
         if engine.name_of_engine!='GTE-170':
             self.G_map=initial_data[name+'.G_map']
@@ -823,20 +834,20 @@ class Compressor():
         self.A_eff_Re_value=self.A_eff_Re.calculate()
 
         if hasattr(self,'angle'):
-            self.G_corr_map_calc=float(self.G_map(self.n_corr/self.ident_n_value,self.betta,self.angle))*self.A_G_ncorr_value*self.A_G_Re_value*self.ident_G_value
+            self.G_corr_map_calc=float(self.G_map(self.n_corr/self.ident_n,self.betta,self.angle))*self.A_G_ncorr_value*self.A_G_Re_value*self.ident_G
         else:
-            self.G_corr_map_calc=float(self.G_map(self.n_corr/self.ident_n_value,self.betta))*self.A_G_ncorr_value*self.A_G_Re_value*self.ident_G_value
+            self.G_corr_map_calc=float(self.G_map(self.n_corr/self.ident_n,self.betta))*self.A_G_ncorr_value*self.A_G_Re_value*self.ident_G
         self.G_corr_error=(self.G_corr_map_calc-self.inlet.G_corr)/self.inlet.G_corr #считаем невязку
 
         if hasattr(self,'angle'):
-            self.PRtt=(float(self.PR_map(self.n_corr/self.ident_n_value,self.betta,self.angle))-1.0)*self.A_PR_ncorr_value*self.A_PR_Re_value*self.ident_PR_value+1.0#из характеристики ищем PR
-            self.efftt=float(self.eff_map(self.n_corr/self.ident_n_value,self.betta,self.angle))*self.A_eff_ncorr_value*self.A_eff_Re_value*self.ident_eff_value#из характеристики ищем кпд
+            self.PRtt=(float(self.PR_map(self.n_corr/self.ident_n,self.betta,self.angle))-1.0)*self.A_PR_ncorr_value*self.A_PR_Re_value*self.ident_PR+1.0#из характеристики ищем PR
+            self.efftt=float(self.eff_map(self.n_corr/self.ident_n,self.betta,self.angle))*self.A_eff_ncorr_value*self.A_eff_Re_value*self.ident_eff#из характеристики ищем кпд
         else:
             #TODO!!! Важно помнить, что в данной модели для Климова не корректно домножается величина PR из характеристики на поправочный коэффициент (напрямую), корректно сначала вычесть 1, домножить на коэффициент, потом прибавить 1. Для любой не климовской модели нужно исправить на корректный варинат
             # self.PRtt=float(self.PR_map(self.n_corr/self.ident_n_value,self.betta))*self.A_PR_ncorr_value*self.A_PR_Re_value*self.ident_PR_value#из характеристики ищем PR
             #это корркетный вариант расчета поправки к PR (см.TODO чуть выше)  
-            self.PRtt=(float(self.PR_map(self.n_corr/self.ident_n_value,self.betta))-1.0)*self.A_PR_ncorr_value*self.A_PR_Re_value*self.ident_PR_value+1.0#из характеристики ищем PR
-            self.efftt=float(self.eff_map(self.n_corr/self.ident_n_value,self.betta))*self.A_eff_ncorr_value*self.A_eff_Re_value*self.ident_eff_value#из характеристики ищем кпд
+            self.PRtt=(float(self.PR_map(self.n_corr/self.ident_n,self.betta))-1.0)*self.A_PR_ncorr_value*self.A_PR_Re_value*self.ident_PR+1.0#из характеристики ищем PR
+            self.efftt=float(self.eff_map(self.n_corr/self.ident_n,self.betta))*self.A_eff_ncorr_value*self.A_eff_Re_value*self.ident_eff#из характеристики ищем кпд
 #        self.inlet.calculate() #еще раз уточняем сечение на входе, т.к. там появилось значение расхода воздуха
         self.outlet.mass_comp=self.inlet.mass_comp
         self.outlet.R = td.R_mix(self.outlet.mass_comp)
@@ -877,12 +888,63 @@ class Compressor():
         self.outlet.status()
         
 class Turbine():
+    # dict('краткое_обозначение_в_коде':('полное_обозначение', значение_по_умолчанию, обязательно_ли_задавать_в_исходных_данных, может_ли_быть_значение_задано_функцией, тип_данных_которые_должен_ввести_пользователь))
+    parameters = {'rotor': ('номер ротора', None, True, False, int), #номер ротора начинается с 1!
+                  'eff_mech': ('механический кпд', 1.0, True, False, float ),
+                  'inlet.F': ('площадь сечения на входе', np.nan, False, False, float),
+                  'throttle.F': ('площадь сечения в горле первого СА', np.nan, False, False, float),
+                  'outlet.F': ('площадь сечения на выходе', np.nan, False, False, float),
+                  'A_Cap_Re': ('поправка к характеристике турбины по пропускной способности от числа Рейнольдса', 1.0, True,True, str),
+                  'A_PR_Re': ('поправка к характеристике турбины по степени понижения давления в зависимости от числа Рейнольдса',1.0, True, True, str),
+                  'A_eff_Re': ('поправка к характеристике турбины по кпд в зависимости от числа Рейнольдса', 1.0, True,True,str),
+                  'A_A_Re': ('поправка к характеристике турбины по углу выхода в зависимости от числа Рейнольдса', 1.0, True,True, str),
+                  'A_L_Re': ('поправка к характеристике турбины по безразмерной скорости в зависимости от числа Рейнольдса', 1.0, True,True, str),
+                  'ident_Cap': ('коэффициент увязки к характеристике турбины по пропускной способности', 1.0, True, False,float),
+                  'ident_PR': ('коэффициент увязки к характеристике турбины по степени понижения давления', 1.0, True,False,float),
+                  'ident_eff': ('коэффициент увязки к характеристике турбины по кпд', 1.0, True, False,float),
+                  'ident_eff_mech': ('коэффициент увязки по механическому кпд', 1.0, True, False,float),
+                  'ident_n': ('коэффициент увязки к характеристике турбины по оборотам', 1.0, True, False, float),
+                  'ident_A': ('коэффициент увязки к характеристике турбины по углу выхода потока', 1.0, True, False, float),
+                  'ident_L': ('коэффициент увязки к характеристике турбины по скорости потока на выходе', 1.0, True, False, float),
+                  'T_throttle_design_point': ('температура газа в горле СА на расчетном режиме', None, True, False, float),
+                  'P_inlet_design_point': ('давление газа перед турбиной на расчетном режиме', None, True, False, float),
+                  'N_offtake': ('отбор мощности', 0.0, True, False, float),
+                  }
+
+
+
     def __init__(self, initial_data, upstream, engine ,name):
         self.name=name
-#        id_names.append(name)
-#        id_links.append(self)
         engine.devices[name] = self
-        self.rotor=int(initial_data[name+'.rotor']) #номер ротора (этот номер должен быть согласован с другими узлами ГТД на этом же роторе, т.е. узлы (турбина) на одном роторе имеют один номер ротора)
+        self.upstream=upstream
+        self.inlet=upstream.outlet
+        self.throttle=td.CrossSection(self.name) #примем что это сечение соответствует горлу первого (если их больше) соплового аппарата в турбине
+        self.outlet=td.CrossSection(self.name)
+
+        initialize_parameters(Turbine, self, initial_data)
+        # for key in Turbine.parameters.keys():
+        #     new_value = initial_data.get((name + '.' + key))
+        #     if is_value_exist(new_value):
+        #         #проверяем, что имя параметра, куда мы хотим записать новое значение не занято кем-то
+        #         old_value=has_address(self, key)
+        #         if old_value[0] and not np.isnan(old_value[1]):
+        #             name_of_parameter = name + '.' + key
+        #             solverLog.info(f'Error! Parameters conflict in device "{self.name}". Parameter "{name_of_parameter}"={new_value} conflicts with old value = {old_value[1]}.')
+        #             raise SystemExit
+        #         #если значение может быть функцией, то сохраняем его в виде объета parser_formula
+        #         if Turbine.parameters[key][3]:
+        #             formula_object=Parser.Parser_formula()
+        #             formula_object.prepare_RHS_of_formula(str(new_value))
+        #             set_address(self, key, formula_object)
+        #         else:
+        #             set_address(self, key, new_value)
+        #     else:
+        #         if Turbine.parameters[key][2]:
+        #             name_of_parameter=name+'.'+key
+        #             solverLog.error(f'Error! Undefined parameter "{name_of_parameter}". You can set default value = {Turbine.parameters[key][1]}')
+        #             # raise SystemExit
+
+        self.rotor = int(self.rotor)
         self.name_of_n='n'+str(self.rotor)
         self.name_of_betta=name+'.betta'
         self.name_of_error=name+'.capacity'
@@ -891,10 +953,6 @@ class Turbine():
         engine.arguments[self.name_of_betta]=np.nan #сообщаем словарю arguments, что нам нужен параметр, характеризующий вспомогательную переменную бетта для расчета характеристики
 
 #        self.id=len(id_names)-1
-        self.upstream=upstream
-        self.inlet=upstream.outlet
-        self.throttle=td.CrossSection(self.name) #примем что это сечение соответствует горлу первого (если их больше) соплового аппарата в турбине
-        self.outlet=td.CrossSection(self.name)
         self.n_phys=np.nan #физические обороты ротора
         self.n_corr=np.nan#приведенные обороты ротора
         self.PRtt=np.nan#степень повышения полного давления
@@ -903,70 +961,34 @@ class Turbine():
         self.sigmaNGV=1#потери полного давления в сопловом аппарате !!!(в данной модели исходим из того, что сигма = 1, иначе нужно подумать как быть с пропускной способностью - смотри пояснения к Cap_map ниже)
         self.efftt=np.nan#кпд
         self.effts=np.nan#кпд по статическим параметрам на выходе
-        self.eff_mech=initial_data.get(name+'.eff_mech',np.nan)
+        # self.eff_mech=initial_data.get(name+'.eff_mech',np.nan)
         self.eff_mech_corrected = np.nan
 
         self.N=np.nan#мощность турбины, отсюда уже вычтены потери от механического кпд и отборы мощности
         self.Alfa_outlet=np.nan
         self.Lambda_outlet=np.nan
         self.betta=np.nan#вспомогательная переменная, характеризующая положение расчетной точки на характеристике. Ее нормальное значение от 0 до 1, допускаются небольшие отклонения, которые говорят о том, что расчет идет в области экстраполяции, т.е. с низкой точностью
-        self.Re=np.nan 
-        
-        self.A_Cap_Re=initial_data.get((name+'.A_Cap_Re'),default_function(1))
-        self.A_Cap_Re.check_parameters(self)
-        self.A_PR_Re=initial_data.get((name+'.A_PR_Re'),default_function(1))
-        self.A_PR_Re.check_parameters(self)        
-        self.A_eff_Re=initial_data.get((name+'.A_eff_Re'),default_function(1))
-        self.A_eff_Re.check_parameters(self)
-        self.A_A_Re=initial_data.get((name+'.A_Alfa_Re'),default_function(1))
-        self.A_A_Re.check_parameters(self)        
-        self.A_L_Re=initial_data.get((name+'.A_lambda_Re'),default_function(1))
-        self.A_L_Re.check_parameters(self)      
-        
-        self.A_eff_PR=initial_data.get((name+'.A_eff_PR'),default_function(1))
-        self.A_eff_PR.check_parameters(self)
+        self.Re=np.nan
         
         self.A_Cap_Re_value=np.nan #коэффициенты А - искусственные поправочные коэффициенты к характеристикам
         self.A_PR_Re_value=np.nan
         self.A_eff_Re_value=np.nan
         self.A_A_Re_value=np.nan
         self.A_L_Re_value=np.nan     
-        
-        self.A_eff_PR_value=np.nan
-        
-        #для увязки
-        self.ident_Cap_value=initial_data.get('ident.'+name+'.Cap',1.0)
-        self.ident_PR_value=initial_data.get('ident.'+name+'.PR',1.0)
-        self.ident_eff_value=initial_data.get('ident.'+name+'.eff',1.0)
-        self.ident_n_value=initial_data.get('ident.'+name+'.n',1.0)
-        self.ident_A_value=initial_data.get('ident.'+name+'.A',1.0)
-        self.ident_L_value=initial_data.get('ident.'+name+'.L',1.0)
-        self.ident_eff_mech=initial_data.get('ident.'+name+'.eff_mech',1.0)
 
-        self.T_throttle_design_point=initial_data[name+'.T_inlet_dp']#температура в горле в расчетной точке (т.е. на режиме, на котором проводилось проектирование турбины)
-        self.P_inlet_design_point=initial_data[name+'.P_inlet_dp']#давление на входе в расчетной точке (т.е. на режиме, на котором проводилось проектирование турбины)
         self.Cap_map=initial_data[name+'.Capacity_map'] #!!!есть одна особенность с вычислением пропускной способности. Для экспериментальных характеристик обычно используют давление перед турбиной, а температуру и расход в горле. Это надо помнить и понимать и при необходимости корректировать модель. В данном случае будем подразумевать, что нужная нам пропускная способность - в горле
         self.PR_map=initial_data[name+'.PR_map']
         self.eff_map=initial_data[name+'.eff_map']
         self.A_map=initial_data[name+'.A_map']
         self.L_map=initial_data[name+'.L_map']
-        self.N_offtake=initial_data.get((name+'.N_offtake'),0.0) #TODO! вообще лучше использовать самописный аналог функции get, потому что get не может возвращать функцию, а в initial_data иногда может задаваться функция для различных параметров. В данный момент в этой роли работает функция extract
+        # self.N_offtake=initial_data.get((name+'.N_offtake'),0.0) #TODO! вообще лучше использовать самописный аналог функции get, потому что get не может возвращать функцию, а в initial_data иногда может задаваться функция для различных параметров. В данный момент в этой роли работает функция extract
         self.Cap_error=np.nan
         self.Cap_map_calc=np.nan
-        _F=initial_data.get((name+'.F_inlet'),np.nan)
-        if ~np.isnan(self.inlet.F) and ~np.isnan(_F):
-            print('В узлах %s и %s конфликт площадей: %.3f и %.3f' % (self.name,self.upstream.name,_F,self.inlet.F))
-            raise SystemExit
-        elif np.isnan(self.inlet.F) and ~np.isnan(_F):
-            self.inlet.F=_F
-
-        self.throttle.F=initial_data.get((name+'.F_throttle'),np.nan)
-        self.outlet.F=initial_data.get((name+'.F_outlet'),np.nan)
         initial_data['amount_of_rotors'].add(self.rotor)
         initial_data['amount_of_betta']+=1
         self.betta_id=initial_data['amount_of_betta']
         
-        self.Re_dp=(1.019716e-005*initial_data[name+'.P_inlet_dp'])/td.Dyn_visc_klimov(initial_data[name+'.T_inlet_dp'])/(np.sqrt(initial_data[name+'.T_inlet_dp'])) #TODO!!! проверить
+        self.Re_dp=(1.019716e-005*self.P_inlet_design_point)/td.Dyn_visc_klimov(self.T_throttle_design_point)/(np.sqrt(self.T_throttle_design_point)) #TODO!!! проверить физичность
 
     @property
     def eff_mech(self):
@@ -1010,15 +1032,16 @@ class Turbine():
 #        _func=lambda _betta: self.throttle.capacity-self.A_Capacity_corr*float(self.Cap_map(n_corr_corrected,_betta))
 #        self.betta=brentq(_func,-0.5,1.5,disp=True)
         self.betta=engine.arguments[self.name_of_betta]
-        self.Cap_map_calc=self.A_Cap_Re_value*self.ident_Cap_value*(float(self.Cap_map(self.n_corr/self.ident_n_value,self.betta)))
+        self.Cap_map_calc=self.A_Cap_Re_value*self.ident_Cap*(float(self.Cap_map(self.n_corr/self.ident_n,self.betta)))
         self.Cap_error=(self.Cap_map_calc-self.throttle.capacity)/self.throttle.capacity #!!!!!!важно помнить, что почти всегда пропускная способность считается по полному давлению перед турбиной, а не как здеси и как правильно, т.е. по давлению в горле. Поэтому если вдург в СА будут задаваться полные потери давления, то это нужно учесть и подумать, как поменять алгоритм расчета
         #TODO!!! Важно помнить, что в данной модели для Климова не корректно домножается величина PR из характеристики на поправочный коэффициент (напрямую), корректно сначала вычесть 1, домножить на коэффициент, потом прибавить 1. Для любой не климовской модели нужно исправить на корректный варинат
-        self.PRtt=self.A_PR_Re_value*self.ident_PR_value*(float(self.PR_map(self.n_corr/self.ident_n_value,self.betta)))#из характеристики ищем PR
+        self.PRtt=self.A_PR_Re_value*self.ident_PR*(float(self.PR_map(self.n_corr/self.ident_n,self.betta)))#из характеристики ищем PR
 #это корркетный вариант расчета поправки к PR (см.TODO чуть выше)  self.PRtt=self.A_PR_Re_value*(float(self.PR_map(self.n_corr,self.betta))-1.0)+1.0#из характеристики ищем PR
-        self.A_eff_PR_value=self.A_eff_PR.calculate()
-        self.efftt=self.A_eff_Re_value*self.A_eff_PR_value*self.ident_eff_value*float(self.eff_map(self.n_corr/self.ident_n_value,self.betta))#из характеристики ищем кпд
-        self.Alfa_outlet=self.A_A_Re_value*self.ident_A_value*float(self.A_map(self.n_corr/self.ident_n_value,self.betta))
-        self.Lambda_outlet=self.A_L_Re_value*self.ident_L_value*float(self.L_map(self.n_corr/self.ident_n_value,self.betta))
+        # self.A_eff_PR_value=self.A_eff_PR.calculate()
+        # self.efftt=self.A_eff_Re_value*self.A_eff_PR_value*self.ident_eff_value*float(self.eff_map(self.n_corr/self.ident_n_value,self.betta))#из характеристики ищем кпд
+        self.efftt = self.A_eff_Re_value * self.ident_eff * float(self.eff_map(self.n_corr / self.ident_n, self.betta))  # из характеристики ищем кпд
+        self.Alfa_outlet=self.A_A_Re_value*self.ident_A*float(self.A_map(self.n_corr/self.ident_n,self.betta))
+        self.Lambda_outlet=self.A_L_Re_value*self.ident_L*float(self.L_map(self.n_corr/self.ident_n,self.betta))
         self.outlet.P=self.inlet.P/self.PRtt
         
         #здесь д.б. учет подвода воздуха в середине и  в конце турбины, должны быть известны: G, H, mass_comp и R, также мощность вырабатываемая подводимым воздухом
@@ -1082,100 +1105,63 @@ def efficiency_combustor(Gamma,Gamma_dp,eff_dp): #формула из книги
     return 1-10**y
 
 class Combustor():
+    # перечисление всех возможных параметров узла в следующем формате:
+    # dict('краткое_обозначение_в_коде':('полное_обозначение', значение_по_умолчанию, обязательно_ли_задавать_в_исходных_данных, может_ли_быть_значение_задано_функцией, тип_данных_которые_должен_ввести_пользователь))
+    parameters = {'sigma': ('коэффициент восстановления полного давления', 1.0, True, True, str),
+                  'eff': ('полнота сгорания топлива', 1.0, True, True, str),
+                  'ident_sigma': ('коэффициент увязки к характеристике камеры сгорания по коэффициенту восстановления давления', 1.0, False,False,float),
+                  'ident_eff': ('коэффициент увязки к характеристике камеры сгорания по полноте сгорания', 1.0, False,False,float),
+                  'T_fuel': ('температура топлива перед подачей в КС', 288.15, True, False, float),
+                  'L0_manual': ('стехиометрическая постоянная (если на задана, то считаестя автоматически для C1H4)', np.nan, False, False, float),
+                  'inlet.F':('площадь сечения на входе', np.nan,False,False,float),
+                  'outlet.F': ('площадь сечения на выходе', np.nan, False, False, float),
+                  }
     def __init__(self, initial_data, upstream, engine, name):
         self.name=name
-#        id_names.append(name)
-#        id_links.append(self)
-        engine.devices[name] = self
-        self.name_of_Gf=name+'.Gf'
-        engine.arguments[self.name_of_Gf]=np.nan #сообщаем словарю arguments, что нам нужен параметр, характеризующий расход топлива
-#        self.id=len(id_names)-1
         self.upstream=upstream
         self.inlet=upstream.outlet
         self.outlet=td.CrossSection(self.name)
+        engine.devices[name] = self
+
+        initialize_parameters(Combustor, self, initial_data)
+
+        self.name_of_Gf=name+'.Gf'
+        engine.arguments[self.name_of_Gf]=np.nan #сообщаем словарю arguments, что нам нужен параметр, характеризующий расход топлива
+
         self.alfa=np.nan #альфа рассчитываемая автоматом
-
-        #в узлах типа "КС" должна задаваться функция потерь полного давления через раздел {Functions} в исходных данных
-        self.sigma=initial_data.get((name+'.sigma'),np.nan)
-        self.sigma_corrected=np.nan #тут будем хранить сигму с учетом поправок по увязочному коэффициенту
-
-        #в узлах типа "КС" должна задаваться функция потерь полного давления через раздел {Functions} в исходных данных
-        self.eff=initial_data.get((name+'.eff'),np.nan)
-        self.eff_corrected=np.nan #тут будем хранить сигму с учетом поправок по увязочному коэффициенту
-
-        #для увязки
-        self.ident_sigma=initial_data.get('ident.'+name+'.sigma',1.0)
-        self.ident_eff=initial_data.get('ident.'+name+'.eff',1.0)
-
-        # self.sigma = np.nan
+        self.sigma_value=np.nan #тут будем хранить сигму с учетом поправок по увязочному коэффициенту
+        self.eff_value=np.nan #тут будем хранить сигму с учетом поправок по увязочному коэффициенту
         self.N_real=np.nan#тепловой поток от сгорания топлива
         self.N_ideal=np.nan#максимально возможный тепловой поток от сгорания топлива при его полном сгорании
-        self.Ginlet_dp=initial_data.get(name+'.G_inlet_dp',np.nan)
-        self.Pinlet_dp=initial_data.get(name+'.P_inlet_dp',np.nan)
-        self.Tinlet_dp=initial_data.get(name+'.T_inlet_dp',np.nan)
-        self.eff_dp=initial_data.get(name+'.eff_dp',np.nan)
-        self.Volume=initial_data.get(name+'.Volume',np.nan) #объем жаровой трубы
-        self.Gamma=np.nan #параметр из Gas Turbine Performance - Fletcher, вроед бы это что-то типа теплонапряженности КС
-        self.Gamma_dp=Gamma(self.Ginlet_dp,self.Pinlet_dp,self.Tinlet_dp,self.Volume)
+
+        # self.Ginlet_dp=initial_data.get(name+'.G_inlet_dp',np.nan)
+        # self.Pinlet_dp=initial_data.get(name+'.P_inlet_dp',np.nan)
+        # self.Tinlet_dp=initial_data.get(name+'.T_inlet_dp',np.nan)
+        # self.eff_dp=initial_data.get(name+'.eff_dp',np.nan)
+        # self.Volume=initial_data.get(name+'.Volume',np.nan) #объем жаровой трубы
+        # self.Gamma=np.nan #параметр из Gas Turbine Performance - Fletcher, вроед бы это что-то типа теплонапряженности КС
+        # self.Gamma_dp=Gamma(self.Ginlet_dp,self.Pinlet_dp,self.Tinlet_dp,self.Volume)
         
         #TODO!!! сделать штуку, которая бы переключала возможность вычисления полноты сгорания по методике gas turbine performance и выводила эту инфу в лог
-        self.Th=np.nan
+        # self.Th=np.nan
         self.Gair_in_burner=np.nan #расход воздуха через жаровую трубу, т.е. с вычитом воздуха на отборы из КС
         self.G_fuel=np.nan
-        self.T_fuel=initial_data[name+'.T_fuel'] #TODO! сделать так, чтобы температуру топлива можно было задавать как констртанту, как функцию или чтобы по умолчанию она равнялась температуре окружающей среды
         self.H_fuel=np.nan
-
         self.mass_comp_fuel=initial_data['mass_comp_fuel']
-        self.L0_manual=initial_data.get((name+'.L0'),np.nan) #TODO! сделать алгоритм с возможностью задавать L0 вручную так, чтобы это влияло на состав продуктов сгорания, сейчас L0 dычисляется исходя из состава топлива CxHy
-        self.L0=td.Stoichiometric_const(mass_comp_air=engine.ambient.external_conditions.mass_comp, mass_comp_fuel=self.mass_comp_fuel) if np.isnan(self.L0_manual) else self.L0_manual
+        self.L0_auto=td.Stoichiometric_const(mass_comp_air=engine.ambient.mass_comp_dry_air, mass_comp_fuel=self.mass_comp_fuel)
+        self.L0=self.L0_auto if np.isnan(self.L0_manual) else self.L0_manual
         self.Hu_real = np.nan
         self.Hu_ideal_298 = td.Low_heat_of_combustion(mass_comp_air=engine.ambient.mass_comp_dry_air,mass_comp_fuel=self.mass_comp_fuel,L0=self.L0)
-
-        _F=initial_data.get((name+'.inlet.F'),np.nan)
-        if ~np.isnan(self.inlet.F) and ~np.isnan(_F):
-            print('В узлах %s и %s конфликт площадей: %.3f и %.3f' % (self.name,self.upstream.name,_F,self.inlet.F))
-            raise SystemExit
-        elif np.isnan(self.inlet.F) and ~np.isnan(_F):
-            self.inlet.F=_F
-        self.outlet.F=initial_data.get((name+'.outlet.F'),np.nan)
-
-    @property
-    def sigma(self):
-        if isinstance(self.sigma_map,float):
-            return self.sigma_map
-        else:
-            return self.sigma_map.calculate()
-
-    @sigma.setter
-    def sigma(self,x):
-        self.sigma_map=x
-        if self.sigma_map is np.nan:
-            solverLog.info('Error! В исходных данных для узла '+self.name+' не задана характеристика потерь давления sigma')
-            raise SystemExit
-
-    @property
-    def eff(self):
-        if isinstance(self.eff_map,float):
-            return self.eff_map
-        else:
-            return self.eff_map.calculate()
-
-    @eff.setter
-    def eff(self,x):
-        self.eff_map=x
-        if self.eff_map is np.nan:
-            solverLog.info('Error! В исходных данных для узла '+self.name+' не задана характеристика полноты сгорания eff')
-            raise SystemExit
 
     def calculate(self,engine):
 #        должны быть заданы Pinlet, Tinlet, Tfuel, Gfuel, Gair, dp(Ginlet, Pinlet, Tinlet)
         
         self.G_fuel=engine.arguments[self.name_of_Gf]*self.inlet.G/15 #в данном случае в массиве variables задается относительный расход топлива, это сделано для удобства, чтобы каждый раз не корректировать первоначальный приближения. Относительный расход топлива равен приблизительно от 0 до 1, но может и немного отклоняться от этого диапазона. В формуле число 15 - это примерный стехиометрический коэффициент для керосина.
         self.H_fuel=td.H(self.T_fuel,self.mass_comp_fuel)
-        self.Gamma=Gamma(self.inlet.G,self.inlet.P,self.inlet.T,self.Volume)
-        self.sigma_corrected=self.sigma*self.ident_sigma
+        # self.Gamma=Gamma(self.inlet.G,self.inlet.P,self.inlet.T,self.Volume)
+        self.sigma_value= self.sigma.calculate() * self.ident_sigma
         #TODO!!! также нужно подумать, как реализовать такую штуку: нужно иметь возможность задавать функцию в зависимости от какого-то параметра, который на данном этапе еще не вычислен, но он может быть известен на предыдущей итерации, соответственно его можно взять из предыдущей итерации. Например, в данном случае это коэффициент потерь полного давления в КС сигма, который должен зщависеть от расхода воздуха на выходе, который на данном этапе еще неизвестен
-        self.outlet.P=self.inlet.P*self.sigma_corrected
+        self.outlet.P=self.inlet.P*self.sigma_value
         
         #здесь должен быть расчет отбора, для расчета КС нужны величины: G, 
 #        secondary_air_system.update_Gref() #обновляем значение ссылочного расхода воздуха
@@ -1183,12 +1169,12 @@ class Combustor():
         
         self.Gair_in_burner=self.inlet.G+(G0+Gmid+G1)
         self.outlet.G=self.Gair_in_burner+self.G_fuel
-        #*efficiency_combustor(self.Gamma,self.Gamma_dp,self.eff_dp) - вариант вычисления по методике из gas Turbine Performance
-        self.eff_corrected=self.eff*self.ident_eff
-        self.alfa,self.outlet.mass_comp=td.Combustion_properties(mass_comp_air=self.inlet.mass_comp, mass_comp_fuel=self.mass_comp_fuel, G_fuel=self.G_fuel, G_air=self.Gair_in_burner,eff_brn=self.eff_corrected)
-        # self.alfa,self.outlet.mass_comp=td.Combustion_properties(mass_comp_air=self.inlet.mass_comp, mass_comp_fuel=self.mass_comp_fuel, G_fuel=self.G_fuel, G_air=self.Gair_in_burner,eff_brn=self.eff_corrected,L0=self.L0)
+        #efficiency_combustor(self.Gamma,self.Gamma_dp,self.eff_dp) - вариант вычисления по методике из gas Turbine Performance
+        self.eff_value= self.eff.calculate() * self.ident_eff
+        self.alfa,self.outlet.mass_comp=td.Combustion_properties(mass_comp_air=self.inlet.mass_comp, mass_comp_fuel=self.mass_comp_fuel, G_fuel=self.G_fuel, G_air=self.Gair_in_burner, eff_brn=self.eff_value)
+        # self.alfa,self.outlet.mass_comp=td.Combustion_properties(mass_comp_air=self.inlet.mass_comp, mass_comp_fuel=self.mass_comp_fuel, G_fuel=self.G_fuel, G_air=self.Gair_in_burner,eff_brn=self.eff_value,L0=self.L0)
         self.outlet.H=(self.H_fuel*self.G_fuel+self.inlet.H*self.Gair_in_burner)/(self.G_fuel+self.Gair_in_burner)
-        self.Hu_real= td.Low_heat_of_combustion(self.inlet.mass_comp, self.mass_comp_fuel,eff=self.eff_corrected,L0=self.L0)#теплотворная способность топлива из функции Combustion_properties рассчитывается с учетом полноты сгорания, поэтому чтобы узнать теоретическую идеальную Hu нужно в эту функцию подставить полноту сгорания = 1
+        self.Hu_real= td.Low_heat_of_combustion(self.inlet.mass_comp, self.mass_comp_fuel, eff=self.eff_value, L0=self.L0)#теплотворная способность топлива из функции Combustion_properties рассчитывается с учетом полноты сгорания, поэтому чтобы узнать теоретическую идеальную Hu нужно в эту функцию подставить полноту сгорания = 1
         self.N_real=self.G_fuel*self.Hu_real #реальная тепловая мощность сгорания топлива в кс
         self.N_ideal=self.G_fuel*self.Hu_ideal_298
         self.outlet.calculate_thru_FG()
@@ -1421,6 +1407,7 @@ class Ambient():
         self.humidity=np.nan
         self.mass_comp_dry_air=initial_data['mass_comp_ambient']#здесь задаестя состав сухого воздуха, т.е. без учета влажности, если иначе, то нужно менять алгоритм
         self.WAR=np.nan
+
     def calculate(self,engine): #массив variables будет построен по следующей схеме {0)Th,1)Ph,2)Humidity, 3)Mach number,4)Ginlet,5)Gfuel,6)n1,...,nx, x)betta...}
                             
         self.external_conditions.Ts=engine.arguments['Th']
