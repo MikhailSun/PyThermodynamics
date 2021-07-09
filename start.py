@@ -34,7 +34,6 @@ Model0=eng.Engine(filename_of_input_data='input_data_GTE170.dat') #исходн�
 # parametric_study_rezults=Model0.parametric_study({'hpt.ident_Cap_value':[0.95,0.975,1,1.02,1.04,1.06,1.08,1.1]}, {'ident.SAS.3':[1.0,1.1,1.2,1.3,1.4,1.5,1.6,1.7,1.8]})
 try:
     rezults=Model0.solve_static_modes()
-
     Model0.save_rezults_to_file(rezults_data=rezults,filename_where_to_save='results_thermodynamics.csv')
     Model0.make_graphics()
     # Model0.make_graphics_of_maps(rezults)
