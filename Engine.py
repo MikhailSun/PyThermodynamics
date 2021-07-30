@@ -72,6 +72,11 @@ date_text=now.strftime("date:%Y.%m.%d, time:%H:%M")
 
 #solverLog.info(date_text)
 
+#вспомогательный класс нужный для хранения данных
+class data():
+    def __init__(self):
+        pass
+
 class Engine():
     # перечисление возможных единиц измерения
     units = {'m': (1, 0),
@@ -144,7 +149,7 @@ class Engine():
         self.operating_mode=dict()#список, где будут храниться параметры, определяющие режима работы двигателя, рассчитываемые в данный момент
         self.variables=dict() #количество переменных (а значит и невязок residuals) должно быть равно колво аргументов - колво аргументов заданных в исходных данных initial_data
         self.initial_approaches=list()#список, где будут хранитсья первоначальные приближения, задаваемые пользоватлеем через input_data
-
+        self.sum_of_residuals=np.nan #тут будет храниться статус расчета (нормально посчиталось или нет)
         self.input_data_filename=''
         model_filename=self.read_filename_of_model(filename_of_input_data)
         Parser.Parser_formula.BASE_LINK_TO_EXTRACT = self
@@ -190,6 +195,8 @@ class Engine():
             self.Ne=np.nan
 
     def calculate(self):
+        for udf in Parser.Parser_formula.USER_DEFINED_FUNCTIONS.values():
+            udf.base_link_to_extract=self# обновляем ссылку на объект откуда формулы будут брать числовые значения
 
         for name, device in self.devices.items():
             device.calculate(self)
@@ -277,7 +284,7 @@ class Engine():
             calc_mode=False
             for line in _file: #перебираем по очереди все строки
                 _temp=line.split('#') #если строка начинается с решетки, значит следом за ней комментарий, который мы отбрасываем
-                if ('{model}' in _temp or '{Model}' in _temp) and calc_mode==False:
+                if ('{model}' in _temp[0] or '{Model}' in _temp[0]) and calc_mode==False:
                     calc_mode = True
                     continue
                 elif calc_mode==True:
@@ -289,6 +296,8 @@ class Engine():
         return filename_of_model
 
     def read_modes_from_input_data(self):#чтение из внешнего файла, задаваемого пользователем, данных о необходимых для расчета режимов. Обычно это файл input_data.dat
+        data_for_parser = data()
+        i_mode=int(0) #счетчик режимов
         user_input = {}
         with open(self.input_data_filename) as _file: #загоняем всю информацию из файла с исходными данными в словарь user_input
             calc_mode=''
@@ -307,6 +316,9 @@ class Engine():
                     _temp=re.findall(r'([^{}]+)(?:\{)*([^{}]+)(?:\{)*',_temp[0]) #в списке будут содержимое до скобок и второй элемент - содержимое внутри скобок
                     if not _temp:
                         continue
+
+                    data_for_parser.__setattr__('mode'+str(i_mode),data()) #создаем штуку где будем хранить значения заданных параметров из исходных данных
+                    link_to_data_for_parser=data_for_parser.__getattribute__('mode'+str(i_mode))
 
                     # _initial_approach=re.findall(r'(?:\'|\")?(\w+)(?:\'|\")?\s*(?:=|:)\s*(\-?\d+\.?\d*)\s*',_temp[0][1])
 
@@ -334,6 +346,7 @@ class Engine():
                             user_input[name] =_obj
                             for_log[name] = value.strip()
                         else:
+                            name = name.strip()
                             #исходная штука, котрая умеет парсить только числовые знаечния и единицы
                             # rez=re.findall(r'([\d\.-]+)(\w*)',value)[0]
                             #расширенная штука, которая вместо числовых значений еще умеет парсить формулы
@@ -341,10 +354,12 @@ class Engine():
                             self.unit_rezult=1
                             self.unit_operation='*'
                             # здесь значением rez[0] может быть число или формула - нужно распознать
-                            если используется функция, то непонятно откуда она должна брать аргументы, т.к. на момент расчета этой функции не факт, что значения рагументов известны
-                            надо подумать можно ли ссылаться в разделе задания режимов работы на аргументы которые вычисляются в процессе расчета модели
-
-                            value=float(rez[0])
+                            # если используется функция, то непонятно откуда она должна брать аргументы, т.к. на момент расчета этой функции не факт, что значения рагументов известны
+                            # надо подумать можно ли ссылаться в разделе задания режимов работы на аргументы которые вычисляются в процессе расчета модели
+                            formula=Parser.Parser_formula(link_to_extract=link_to_data_for_parser)
+                            formula.prepare_RHS_of_formula(rez[0])
+                            value=formula()
+                            # value=float(rez[0])
                             unit=rez[1]
                             _temp=re.search(r'^\s*(?:C|С)\s*$',unit) #проверяем если исходные единицы измерения - градусы Цельсий, то это осбый случай (если  Цельсий стоит отдельно сам по себе это не то же самое, когда Цельсий находится в составе сложной единицы измерения с другими величинами)
                             if _temp:
@@ -352,8 +367,10 @@ class Engine():
                             else:
                                 self.parser_for_units(unit)
                                 user_input[name]=value*self.unit_rezult
+                            link_to_data_for_parser.__setattr__(name,user_input[name])
                             for_log[name]=rez[0]+rez[1]
                     self.user_input_operating_modes.append(user_input)
+                    i_mode += 1
                     for_log_main.append(for_log)
                 # if calc_mode=='{model_filename}' and re.findall(r'\s*(.*)\s*',_temp[0])[0]:
                 #     _temp=re.findall(r'\s*(.*)\s*',_temp[0])[0] #с помощью регулярок дербаним строку
@@ -460,15 +477,15 @@ class Engine():
                         r'^ *T41 *$':(self.named_main_devices['first_turbine'].name+'.throttle.T'),
                         r'^ *T_*(?:z|sa)_*(?:t2|tsd) *$':(self.named_main_devices['second_turbine'].name+'.throttle.T'),
                         r'^ *T_*(?:z|sa)_*(?:t3|tnd|ts|st) *$':(self.named_main_devices['last_turbine'].name+'.throttle.T'),
-                        r'^ *T_*(?:|in)_*(?:t3|tnd|ts|st) *$':(self.named_main_devices['last_turbine'].name+'.input.T'),
-                        r'^ *T_*out_*(?:|t3|tnd|ts|st|t) *$':(self.named_main_devices['last_turbine'].name+'.output.T'),
-                        r'^ *T_*(?:|t3|tnd|ts|st|t) *out_*$':(self.named_main_devices['last_turbine'].name + '.output.T'),
-                        r'^ *P_*(?:k1|knd|ok)_*(?:|out) *$':(self.named_main_devices['first_compressor'].name+'.output.P'),
-                        r'^ *P_*(?:k|k2|kvd|ckx)_*(?:|out) *$':(self.named_main_devices['last_compressor'].name+'.output.P'),
+                        r'^ *T_*(?:|in)_*(?:t3|tnd|ts|st) *$':(self.named_main_devices['last_turbine'].name+'.inlet.T'),
+                        r'^ *T_*out_*(?:|t3|tnd|ts|st|t) *$':(self.named_main_devices['last_turbine'].name+'.outlet.T'),
+                        r'^ *T_*(?:|t3|tnd|ts|st|t) *out_*$':(self.named_main_devices['last_turbine'].name + '.outlet.T'),
+                        r'^ *P_*(?:k1|knd|ok)_*(?:|out) *$':(self.named_main_devices['first_compressor'].name+'.outlet.P'),
+                        r'^ *P_*(?:k|k2|kvd|ckx)_*(?:|out) *$':(self.named_main_devices['last_compressor'].name+'.outlet.P'),
                         r'^ *(?:PR|Pi|PI)_*(?:k|k2|kvd|ck) *$':(self.named_main_devices['last_compressor'].name+'.PRtt'),
                         r'^ *(?:PR|Pi|PI)_*(?:k1|knd|ok) *$':(self.named_main_devices['first_compressor'].name+'.PRtt'),
                         r'^ *G_*(?:|in) *$':(self.named_main_devices['ambient'].name+'.outlet.G'),
-                        r'^ *G_*(?:k1|knd|ok)_*(?:pr|rel|corr) *$':(self.named_main_devices['first_compressor'].name+'.input.G_corr')}
+                        r'^ *G_*(?:k1|knd|ok)_*(?:pr|rel|corr) *$':(self.named_main_devices['first_compressor'].name+'.inlet.G_corr')}
         #проверяем наличие в user_input_operating_mode типичные названия переменных и если находим, то заменяем их на нормальные имена
 
         for mode_num,user_input_operating_mode in enumerate(self.user_input_operating_modes):
@@ -645,21 +662,23 @@ class Engine():
 
         self.arguments.update(self.variables)
         not_calculated_model=copy.deepcopy(self)
-        Parser.Parser_formula.BASE_LINK_TO_EXTRACT=not_calculated_model
+        # Parser.Parser_formula.BASE_LINK_TO_EXTRACT=not_calculated_model#обновляем ссылку на объект откуда формулы будут брать числовые значения
         try:
             not_calculated_model.calculate()
         except:
             print(f"TROUBLE in calculating of model :( \n variables: {self.variables} \n residuals: {self.residuals}")
+            raise ValueError
 #        print(self.lpc.N)
 #        print(self.hpc.N)
 #        print(self.hpt.N)
 #         print(f'alfa={not_calculated_model.variables["compr.angle"]}')
 #         print(f'Tout={not_calculated_model.turb.outlet.T}')
         not_calculated_model.set_residuals_for_static_operating_mode() #TODO! есть баг: после успешного расчета когда зеначения варьируемых параметров уже известны и проводится контрольный расчет с этими варьируемыми параметрами на основе базовой "чистой"/исходной модели, то внутрь этой "чистой" модели не попадают те невязки в массив residuals, которые рассчитываются  вэтой функции. Возможное решение - внести эту функцию внутрь calculate
+        self.residuals=not_calculated_model.residuals
         # print(f'{not_calculated_model.residuals["residual"]}')
         if any(np.isnan(list(not_calculated_model.residuals.values()))):
             solverLog.error(f'Error: some residuals are not calculable: {not_calculated_model.residuals}')
-            raise SystemExit
+            raise ValueError
         if len(self.variables)!=len(not_calculated_model.residuals):
             solverLog.warning(f'Warning: lenght of variables array not equivalent to residuals array: \n Variables:{self.variables} \n Residuals: {not_calculated_model.residuals}')
             # raise SystemExit
@@ -710,7 +729,8 @@ class Engine():
                     raise SystemExit
             stability_factor=100 #значение 100 указано по умолчанию в описании функции root scipy https://docs.scipy.org/doc/scipy/reference/optimize.root-lm.html#optimize-root-lm уменьшение значение увеличивает время расчета, но делает расчет более стабильным!
             variables0=copy.copy(self.variables)
-            while stability_factor>0.01: #если продолжит что-то разваливаться, то возможно стоит уменьшить значение слева
+            self.residuals.clear()
+            while stability_factor>0.001: #если продолжит что-то разваливаться, то возможно стоит уменьшить значение слева
                 try:
                     rez=root(self.equation_to_solve,np.array(list(self.variables.values())),method='lm',options={'ftol': 1.0e-10, 'xtol': 1.0e-10, 'factor': stability_factor})
                     break
@@ -718,20 +738,25 @@ class Engine():
                     solverLog.info('Unstable calculation. Trying to reduce parameter "factor" in function scipy.optimize.root. Factor = '+str(stability_factor))
                     stability_factor/=4
                     self.variables=copy.copy(variables0)
-            if stability_factor<=0.01:
-                solverLog.error('Error! Variables: '+str(self.variables))
+            if stability_factor<=0.001:
+                solverLog.error('Error! Problem with stability factor. Variables: '+str(self.variables))
                 self.make_graphics()
                 raise SystemExit
 
             dtime=datetime.datetime.now()-self.time_before_mode_start
-            solverLog.info('Rezulting variables: '+str(self.variables))
-            solverLog.info('Rezulting residuals: '+str(dict(Engine.residuals_statistics.iloc[-1])))
+            solverLog.info('Resulting variables: '+str(self.variables))
+            res_residuals=dict(self.residuals)
+            solverLog.info('Resulting residuals: '+str(res_residuals))
+            sqrt_of_sum_of_quad_resid=np.sqrt(np.sum([x**2 for x in list(res_residuals.values())]))
+            solverLog.info(f'Sqrt of Sum of quad of residuals: {sqrt_of_sum_of_quad_resid}')
             solverLog.info('Mode '+str(number_of_mode)+': completed. (time:'+str(dtime)+'). Solver success status:'+str(rez['success'])+'. '+str(rez['message']+'\n'))
 
-            entire_status.append(Engine.residuals_statistics.iloc[-1].sum())
+            entire_status.append(sqrt_of_sum_of_quad_resid)
             model_to_save_rezults=copy.deepcopy(self) #создаем копию текущей еще не посчитанной модели, чтобы на следующем шаге посчитать ее и не "пачкать" текущую модель
             model_to_save_rezults.calculate()#полученную модель нужно воспринимать как результат расчета, хранящий в себе результата расчета текущей модели
             model_to_save_rezults.set_residuals_for_static_operating_mode()
+            model_to_save_rezults.sum_of_residuals = sqrt_of_sum_of_quad_resid
+
             rezults.append(model_to_save_rezults)
         if all(val<0.00001 for val in entire_status):
             solverLog.info('Solving status: Full success')
@@ -999,7 +1024,13 @@ class Engine():
             ind=0
         else:
             ind=self.df.index[-1]+1
-        self.df.loc[ind]=[Name,Dimension,round(float(Value),round_to)]
+        list_of_values = []
+        if not isinstance(Value, float) or np.isnan(Value):
+            list_of_values.append(Value)
+        else:
+            list_of_values.append(round(float(Value), round_to))
+        self.df.loc[ind]=[Name,Dimension,list_of_values]
+        # self.df.loc[ind] = [Name, Dimension, round(float(Value), round_to)]
 
     def data_to_table2(self,Name='',Value='',Dimension='',round_to=6): #nоже самое, только value - это список
         list_of_values=[]
@@ -1020,6 +1051,12 @@ class Engine():
         if isinstance(rezults_data, Engine):
             if not hasattr(Engine,'df'):
                 Engine.df = pd.DataFrame(columns=['Name','Dimension','Value'])
+            _name='status/sum of residuals'
+            _dimension=''
+            _values=rezults_data.sum_of_residuals
+            if _values<0.0000000001:
+                _values='OK'
+            self.data_to_table(Name=_name, Value=_values, Dimension=_dimension)
             for hint in Engine.rezults_hint:
                 # p = Parser.Parser(rezults_data)
                 # p.parse(Engine.rezults_hint[hint][0])
@@ -1029,6 +1066,9 @@ class Engine():
                 val=p()
                 self.data_to_table(Name=hint, Value=val, Dimension=Engine.rezults_hint[hint][1])
             Engine.df.to_csv(filename_where_to_save)
+
+
+
         elif isinstance(rezults_data, list):
             names_of_modes=[]
             for i in np.arange(1,len(rezults_data)+1):
@@ -1037,6 +1077,15 @@ class Engine():
                 columns=['Name','Dimension']
                 columns=columns+names_of_modes
                 Engine.df = pd.DataFrame(columns=columns)
+            _name='status/sum of residuals'
+            _dimension=''
+            _values=[]
+            for res in rezults_data:
+                if res.sum_of_residuals<0.0000000001:
+                    _values.append('OK')
+                else:
+                    _values.append(res.sum_of_residuals)
+            self.data_to_table2(Name=_name, Value=_values, Dimension=_dimension)
             for name,formula_and_dimension in Engine.rezults_hint.items():
                 _name=name
                 _dimension=formula_and_dimension[1]
@@ -1103,6 +1152,8 @@ class Engine():
             else:
                 solverLog.error('ERROR! Wrong parameter: '+string)
                 raise SystemExit
+
+
 
 #     #доп функция для проверки правильности заданных пользователем параметров  в исходных данных
 #     def check_input_data(self,filename_of_input_data='',get_list_of_possible_parameters=False):

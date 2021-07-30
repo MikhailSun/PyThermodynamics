@@ -58,17 +58,19 @@ class Parser_formula():
     BASE_LINK_TO_EXTRACT=None
 
     def __init__(self,link_to_extract=None):
-        if not link_to_extract is None:
-            # self.base_link_to_extract = Parser_formula.BASE_LINK_TO_EXTRACT
-            Parser_formula.BASE_LINK_TO_EXTRACT = link_to_extract
-        # else:
-        #     self.base_link_to_extract = link_to_extract
+        if link_to_extract is None:
+            if Parser_formula.BASE_LINK_TO_EXTRACT is None:
+                solverLog.error('ERROR: Parser_formula did not get link_to_extract')
+                raise SystemExit
+            else:
+                self.base_link_to_extract = Parser_formula.BASE_LINK_TO_EXTRACT
+            # Parser_formula.BASE_LINK_TO_EXTRACT = link_to_extract
+        else:
+            self.base_link_to_extract = link_to_extract
 
         self.name_of_function=np.nan #тут будем хранить имя функции
         self.string_formula=np.nan #текстовая формула в человеческом виде
-        if Parser_formula.BASE_LINK_TO_EXTRACT is None:
-            solverLog.error('ERROR: Parser_formula did not get link_to_extract')
-            raise SystemExit
+
         self.polish_formula=[] #вычисляемая формула в польской записи
         self.flag_calculable_formula=True #флаг который будет обозначать возможно ли вычислить формулу, т.е. достаточно ли всех исходных данных. Если недостаточно, то формула будет хранитсья только в виде польской нотации
         self.temp_stack_for_calculation=[]#тут будет храниться стек используемый для вычисления формулы в польской записи, если все правильно посчитано, то в стеке будет одно значение - результат вычисления
@@ -417,7 +419,8 @@ class Parser_formula():
             # есть проблема с такой штукой: 1) есть функ1(x,y)=x+y 2) есть функ2(z)=функ1(х=2y=z) 3) проблема в том, что при попытке присвоить аргументу функ1 значение аргумента z функ2 непонятно как передать ссылка на z
             return self.ARGUMENTS[string]
         elif self.check_exist_parameter_in_obj(string):
-            rez=Parser_formula.BASE_LINK_TO_EXTRACT
+            # rez=Parser_formula.BASE_LINK_TO_EXTRACT
+            rez=self.base_link_to_extract
             broken_string = string.split('.')
             for val in broken_string[:-1]:
                 rez=getattr(rez,val)
@@ -438,7 +441,8 @@ class Parser_formula():
             return False
 
     def check_exist_parameter_in_obj(self,string):
-        rez=Parser_formula.BASE_LINK_TO_EXTRACT
+        # rez=Parser_formula.BASE_LINK_TO_EXTRACT
+        rez=self.base_link_to_extract
         broken_string = string.split('.')
         for val in broken_string:
             if hasattr(rez,val):
@@ -521,7 +525,8 @@ class Parser_formula():
 
     def calc_par(self,parameter):
         if isinstance(parameter,str):
-            rez=Parser_formula.BASE_LINK_TO_EXTRACT
+            # rez=Parser_formula.BASE_LINK_TO_EXTRACT
+            rez=self.base_link_to_extract
             broken_string = parameter.split('.')
             for val in broken_string:
                 if hasattr(rez,val):
@@ -589,10 +594,11 @@ class Parser_formula():
 #4) calculate() - считаем формулу, на выходе д.б. float
 
 
-class test_obj():
+class data():
     def __init__(self):
-        self.devices = dict()
-        self.air_bleed_out = [{'G_abs_from': 3}, 2, 3]
+        self.nichego=dict()
+        #self.devices = dict()
+        #self.air_bleed_out = [{'G_abs_from': 3}, 2, 3]
 # #
 # class test2():
 #     def __init__(self):

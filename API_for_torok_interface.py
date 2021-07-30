@@ -5,6 +5,9 @@ import Parser
 import devices as dev
 import Engine as eng
 import thermodynamics as td
+import makecharts as gr
+import numpy as np
+
 
 
 parameters_to_filter=['name','was_edited','name_of_parent','upstream','devices','_link_to_Gref','bleed_expansion','air_bleed_out','air_bleed_in','ambient.outlet','outlet_ideal'] #отфильтровываем ненужные названия параметровесли точно знаем как они должны называться
@@ -18,11 +21,12 @@ def filter_value(val):
 
 if len(sys.argv)>1:
     params = sys.argv
-
-    if len(params)<3:
-        command=params[1]
-    else:
-        parameters=params[2]
+    command = params[1]
+    parameters = params[2:]
+    # if len(params)<3:
+    #     command=params[1]
+    # else:
+    #     parameters=params[2]
 else:
     print("No command to execute")
 
@@ -81,6 +85,112 @@ elif command == 'get_list_of_possible_parameters': #эта штука генер
     with open(name_of_file, 'w') as f:
         for item in tree:
             f.write(f"{item}\n")
+
+elif command == 'calculate_formula':
+    print(command)
+    print(parameters)#['f(x,y)=x+y #,kfhvlkerh', '1,2', '3,4']
+
+    data_obj=Parser.data()
+    formula_obj=Parser.Parser_formula(link_to_extract=data_obj)
+
+    formula = parameters[0].split('#')
+    formula = formula[0].strip()
+
+    formula_obj.prepare_formula(formula)
+    keys_list=list(formula_obj.ARGUMENTS.keys())
+
+    args = dict()
+    values_list=list()
+    #цикд до конца листа
+    for i in parameters[1:]:
+        #values=i.split(',')
+        values_list.append(i.split(','))
+        #print(values_list)
+
+    outfile = open('data_for_torok/results_formula.dat', 'w')
+
+    for i in range(len(values_list)):
+        for key,value in zip(keys_list,values_list[i]):
+            args[key]=float(value)
+        #print(args)
+        formula_obj.insert_values_in_arguments(**args)
+        res=formula_obj.calculate()
+        outfile.write(str(res))
+        outfile.write('\n')
+        #print(res)
+
+    outfile.close()
+    #results_formula.dat
+
+elif command == 'print_plot':
+    print(command)
+    print(parameters)
+
+    data_obj=Parser.data()
+    formula_obj=Parser.Parser_formula(link_to_extract=data_obj)
+
+    formula = parameters[0].split('#')
+    formula = formula[0].strip()
+
+    formula_obj.prepare_formula(formula)
+
+    #1 точка - нет графика
+    #2 и больше - 1 условие - 1 ргумент(x,y) - если больше писать шо незя
+    #              2 - берем мин и макс и в интервале Х и У - это границы графика
+    #python api.py print_plot 'f(x)=x+1' 1 2
+
+    keys_list = list(formula_obj.ARGUMENTS.keys())
+    if len(keys_list)>1:
+        print('Количество аргументов больше одного. Построение графика невозможно')
+        outfile = open('data_for_torok/results_formula.dat', 'w')
+        outfile.write('Количество аргументов больше одного. Построение графика невозможно')
+        outfile.close()
+
+    elif len(parameters[1:]) == 1:
+        print('Количество данных точек недостаточно для определения диапазона')
+        outfile = open('data_for_torok/results_formula.dat', 'w')
+        outfile.write('Количество данных точек недостаточно для определения диапазона')
+        outfile.close()
+
+    elif len(parameters) < 4:
+        print('Неверное количество параметров')
+        outfile = open('data_for_torok/results_formula.dat', 'w')
+        outfile.write('Неверное количество параметров')
+        outfile.close()
+
+    else:
+        values_list = []
+        # цикд до конца листа
+        values_list=[float(val) for val in parameters[1:3]]
+
+        args = dict()
+        x = []
+        y = []
+        X_min = np.min(values_list)
+        X_max = np.max(values_list)
+
+        n_of_points = int(parameters[3])
+        #n_of_points = 10
+        for j in range(n_of_points+1):
+            X_current = (X_max - X_min)*(j)/n_of_points + X_min
+            args[keys_list[0]] = X_current
+            formula_obj.insert_values_in_arguments(**args)
+            Y_current = formula_obj.calculate()
+            x = np.append(x,X_current)
+            y = np.append(y,Y_current)
+
+        print(x,y)
+
+
+
+        # Fig = gr.Chart(points_for_scatter=[{'x':x,'y':y}],
+        #                points_for_plot=[{'x': x, 'y': y}], title=parameters[0], xlabel='X', ylabel='Y',
+        #                dpi=150, figure_size=(10, 10))
+        # Fig.figure.savefig('data_for_torok/plot')
+        Fig = gr.Chart(points_for_scatter=[{'x':x,'y':y,'s':50,'c':'lavender'}],
+                       points_for_plot=[{'x': x, 'y': y,'lw':3}], fontsize=20,
+                       dpi=150, figure_size=(10, 10),color_ticklabels='white', color_fig='black', color_axes='black',)
+        Fig.figure.savefig('data_for_torok/plot')
 
 
 else:

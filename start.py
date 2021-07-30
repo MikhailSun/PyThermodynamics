@@ -22,7 +22,7 @@ solverLog.info(f'Python version: {sys.version}')
 
 #1) РАСЧЕТ СТАЦИОНАРНЫХ РЕЖИМОВ
 #ВЕРСИЯ ДЛЯ ПК    
-Model0=eng.Engine(filename_of_input_data='input_data_GTE170.dat') #исходная непосчитанная модель с заведенными в нее исходными данными
+Model0=eng.Engine(filename_of_input_data='input_data.dat') #исходная непосчитанная модель с заведенными в нее исходными данными
 # Model0=eng.Engine() #исходная непосчитанная модель с заведенными в нее исходными данными
 #ВЕРСИЯ ДЛЯ ЗАПУСКА ЧЕРЕЗ КОМАНДНУЮ СТРОКУ
 # Model0=eng.Engine(Model0.read_modes_from_input_data()) #исходная непосчитанная модель с заведенными в нее исходными данными
