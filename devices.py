@@ -887,7 +887,7 @@ class Turbine():
                   'ident_L': ('коэффициент увязки к характеристике турбины по скорости потока на выходе', 1.0, True, False, float),
                   'T_throttle_design_point': ('температура газа в горле СА на расчетном режиме', None, True, False, float),
                   'P_inlet_design_point': ('давление газа перед турбиной на расчетном режиме', None, True, False, float),
-                  'N_offtake': ('отбор мощности', np.nan, True, False, float),
+                  'N_offtake': ('отбор мощности', 0.0, True, True, str),
                   }
 
 
@@ -939,6 +939,7 @@ class Turbine():
         self.eff_map=initial_data[name+'.eff_map']
         self.A_map=initial_data[name+'.A_map']
         self.L_map=initial_data[name+'.L_map']
+        self.N_offtake_value=np.nan
         # self.N_offtake=initial_data.get((name+'.N_offtake'),0.0) #TODO! вообще лучше использовать самописный аналог функции get, потому что get не может возвращать функцию, а в initial_data иногда может задаваться функция для различных параметров. В данный момент в этой роли работает функция extract
         self.Cap_error=np.nan
         self.Cap_map_calc=np.nan
@@ -1017,7 +1018,8 @@ class Turbine():
 #        self.outlet.T=td.T_thru_H(self.outlet.H,self.outlet.mass_comp,T_outlet_isentropic,2500)
         self.outlet.calculate_thru_FG()
         self.eff_mech=self.eff_mech*self.ident_eff_mech
-        self.N=(self.throttle.G*L_real_before_mix_with_bld+Nbld)*self.eff_mech+self.N_offtake #TODO! на момент написания этой строки мне непоянтно, нужно ли вынести за скобку отбираемую мощность N_offtake - надо подумать. Неочевидно, но вроде бы турбина выработала какую-то мощность, потеряла часть энергии в виде механического кпд (потери в подшипниках и т.п.), а после этого от нее отобрали мощность на агрегаты
+        self.N_offtake_value=self.N_offtake()
+        self.N=(self.throttle.G*L_real_before_mix_with_bld+Nbld)*self.eff_mech+self.N_offtake_value #TODO! на момент написания этой строки мне непоянтно, нужно ли вынести за скобку отбираемую мощность N_offtake - надо подумать. Неочевидно, но вроде бы турбина выработала какую-то мощность, потеряла часть энергии в виде механического кпд (потери в подшипниках и т.п.), а после этого от нее отобрали мощность на агрегаты
         self.PRts=self.inlet.P/self.outlet.Ps
         
         engine.residuals[self.name_of_error]=self.Cap_error #фигачим в словарь невязку по пропускной способности

@@ -124,7 +124,7 @@ class Engine():
     variables_statistics = pd.DataFrame()
     parameters_to_monitor = ['turb.n_corr', 'compr.n_corr', 'compr.angle', 'compr.betta', 'turb.betta', 'Ne',
                                   'compr.inlet.G', 'comb.outlet.T', 'compr.PRtt', 'compr.outlet.T', 'turb.throttle.T',
-                                  'turb.outlet.T']  # список параметров, которые хотим мониторить, пока что вводистя только так
+                                  'turb.outlet.T', 'turb.N_offtake_value']  # список параметров, которые хотим мониторить, пока что вводистя только так
     monitors = pd.DataFrame(columns=parameters_to_monitor)  # тут будем храниить значеия тех переменных изменение которых хотим мониторить в процессе расчета
     user_defined_formulas=Parser.Parser_formula.USER_DEFINED_FUNCTIONS
 
@@ -732,7 +732,7 @@ class Engine():
             self.residuals.clear()
             while stability_factor>0.001: #если продолжит что-то разваливаться, то возможно стоит уменьшить значение слева
                 try:
-                    rez=root(self.equation_to_solve,np.array(list(self.variables.values())),method='lm',options={'ftol': 1.0e-10, 'xtol': 1.0e-10, 'factor': stability_factor})
+                    rez=root(self.equation_to_solve,np.array(list(self.variables.values())),method='lm',options={'ftol': 1.0e-12, 'xtol': 1.0e-12, 'factor': stability_factor})
                     break
                 except ValueError:
                     solverLog.info('Unstable calculation. Trying to reduce parameter "factor" in function scipy.optimize.root. Factor = '+str(stability_factor))
@@ -1006,8 +1006,10 @@ class Engine():
                 self.devices['SAS'].ident_G[int(_parameter[2])]=coef_value
                 continue
             elif _parameter[1] in self.devices:
-                if hasattr(self.devices[_parameter[1]],'ident_'+_parameter[2]+'_value'):
-                    setattr(self.devices[_parameter[1]],'ident_'+_parameter[2]+'_value',coef_value)
+                # if hasattr(self.devices[_parameter[1]],'ident_'+_parameter[2]+'_value'):
+                if hasattr(self.devices[_parameter[1]],'ident_'+_parameter[2]):
+                    # setattr(self.devices[_parameter[1]],'ident_'+_parameter[2]+'_value',coef_value)
+                    setattr(self.devices[_parameter[1]], 'ident_' + _parameter[2], coef_value)
                     continue
                 else:
                     solverLog.error('ERROR: Not found parameter from identification coefficient: '+coef_name)
@@ -1048,6 +1050,7 @@ class Engine():
     #штука для сохранения результатов в файл на основе данных, переденных через раздел {Rezults} в файле модели. Результаты извлекаются из объекта results, передаваемого через конструктор - это должен быть экземпляр engine
     def save_rezults_to_file(self,rezults_data=np.nan,filename_where_to_save=''):
         #TODO! продумать возможность вывода в результаты значений формул пользователя из входного файла
+        pd.set_option('display.max_columns', None)
         if isinstance(rezults_data, Engine):
             if not hasattr(Engine,'df'):
                 Engine.df = pd.DataFrame(columns=['Name','Dimension','Value'])
@@ -1109,7 +1112,9 @@ class Engine():
                         _values.append(np.nan)
                         pass
                 self.data_to_table2(Name=_name,Value=_values,Dimension=_dimension)
+            print('test')
             Engine.df.to_csv(filename_where_to_save)
+
 
 
     def parametric_study(self,par1_dict,par2_dict):

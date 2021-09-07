@@ -13,8 +13,8 @@ import numpy as np
 class Chart():
     
     def __init__(self,points_for_scatter=[],points_for_plot=[],title='',xlabel='',ylabel='',ylabel2='',xlim=np.nan,ylim=np.nan,y2lim=np.nan,fontsize='medium',color_ticklabels='black', color_fig='white', color_axes='white',figure_size=(10,6),dpi=100):
-        self.left_margin=0.1
-        self.bottom_margin=0.05
+        self.left_margin=0.15
+        self.bottom_margin=0.1
         self.margin_between_axes=0.05
 
         self.__add_chart(points_for_scatter=points_for_scatter,points_for_plot=points_for_plot,title=title,xlabel=xlabel,ylabel=ylabel,ylabel2=ylabel2,xlim=xlim,ylim=ylim,y2lim=y2lim,fontsize=fontsize,color_ticklabels=color_ticklabels, color_fig=color_fig, color_axes=color_axes,figure_size=figure_size,dpi=dpi)

@@ -18,6 +18,7 @@ from matplotlib import pyplot as plt
 #import tkinter as tk
 import ThermoLog
 import copy
+import Parser
 
 #identLog=ThermoLog.setup_logger('identification_logger','ident.log',logging.DEBUG)
 #identLog.propagate = False
@@ -144,7 +145,6 @@ class identification():
         self.ident_coefs={}
         self.bounds=[]
         self.read_identification_coefficients_and_bounds(filename)
-
     def read_identification_coefficients_and_bounds(self,filename): #штука для считывания ссылок связывающих наименования параметров из файла с расчетными параметрами
     #удобный сайт для проверки регулярок https://regex101.com/
         experiment_filename=open(filename)
@@ -173,8 +173,6 @@ class identification():
                 high_bound=float(_temp[1])
                 self.bounds.append((low_bound,high_bound))
         experiment_filename.close()
-
-
     def read_identification_links_and_diapasons(self,filename): #штука для считывания ссылок связывающих наименования параметров из файла с расчетными параметрами
     #удобный сайт для проверки регулярок https://regex101.com/
         experiment_filename=open(filename)
@@ -196,15 +194,15 @@ class identification():
                 experiment_parameter_name=_temp[0]
                 _temp=_temp[1].split(';')
                 model_name=_temp[0]
-                diapason=_temp[1]
-                
-                self.ident_links[experiment_parameter_name]=model_name
-                self.unit_rezult=1
-                self.unit_operation='*'
-                _temp=re.findall(r'\s*(\d+\.?\d*)\s*([\w\%\/\*\^]*)',diapason)#ищем в оставшесйя строке диапазона числовое значение и размерность
-                self.parser_for_units(_temp[0][1])
-                diapason=float(_temp[0][0])*self.unit_rezult
-                self.reasonable_range_of_variation[experiment_parameter_name]=diapason
+                diapason=_temp[1].strip()
+                self.ident_links[experiment_parameter_name] = model_name
+                if (diapason != ''):
+                    self.unit_rezult=1
+                    self.unit_operation='*'
+                    _temp=re.findall(r'\s*(\d+\.?\d*)\s*([\w\%\/\*\^]*)',diapason)#ищем в оставшесйя строке диапазона числовое значение и размерность
+                    self.parser_for_units(_temp[0][1])
+                    diapason=float(_temp[0][0])*self.unit_rezult
+                    self.reasonable_range_of_variation[experiment_parameter_name]=diapason
         experiment_filename.close()
 
     
@@ -311,10 +309,18 @@ class identification():
                 if exp_key=='name':
                     continue
                 else:
-                    calc_value=self.str2parameter(calc_mode,self.ident_links[exp_key])
+                    # calc_value=self.str2parameter(calc_mode,self.ident_links[exp_key])#эта штука извлекает только значение по прямой ссылке на параметр, это не парсер!
+                    formula_obj=Parser.Parser_formula(calc_mode)
+                    formula_obj.prepare_RHS_of_formula(self.ident_links[exp_key])
+                    calc_value=formula_obj.calculate()
                     _delta=calc_value-exp_value
-                    _error_value=_delta/exp_value
-                    _errors[exp_key]=[_error_value,exp_value,calc_value,_delta,(_delta)/exp_value*100] #элемент словарья _errors хранит в себе список [относительная ошибка,эксп знач,расч знач,абс отклонение, относит отклонение в процентах]
+                    if(self.reasonable_range_of_variation.get(exp_key) is None):
+                        _error_value = _delta / exp_value
+                    else:
+                        _error_value = _delta / self.reasonable_range_of_variation.get(exp_key)
+
+                    # _errors[exp_key]=[_error_value,exp_value,calc_value,_delta,(_delta)/exp_value*100] #элемент словарья _errors хранит в себе список [относительная ошибка,эксп знач,расч знач,абс отклонение, относит отклонение в процентах]
+                    _errors[exp_key] = {'rel_err':_error_value*100, 'exp_val':exp_value, 'calc_val':calc_value, 'delta':_delta}
                     _mode_error_value+=_error_value**2
                     _n_parameters_in_mode+=1
                     
@@ -387,7 +393,7 @@ class identification():
     def calculate_influence(self):
         
         self.model.update_ident_coefs(self.ident_coefs)      
-        self.rezults_list=self.model.solve_modes()
+        self.rezults_list=self.model.solve_static_modes()
         self.compare_experimental_and_calculated_parameters()
         _rez0={}
         for key in self.errors:
@@ -401,7 +407,7 @@ class identification():
             _arg1=1.01*value
             # self.ident_coefs[coef]=_arg1
             self.model.update_ident_coefs({coef:_arg1})      
-            self.rezults_list=self.model.solve_modes()
+            self.rezults_list=self.model.solve_static_modes()
             self.compare_experimental_and_calculated_parameters()
             _rez1={}
             for key in self.errors:
@@ -442,7 +448,7 @@ class identification():
 #                _errors[mode]=mode['mid_error']
 
 #        self.errors_statistics=self.errors_statistics.append(_errors,ignore_index=True)
-        self.rezults_list=self.model.solve_modes()
+        self.rezults_list=self.model.solve_static_modes()
         self.compare_experimental_and_calculated_parameters()
         identLog.info('IDENT: State before identification:')
         self.callback(self.ident_coefs.values())

@@ -1423,6 +1423,7 @@ if type_of_map=="turbine":
         main_rezult.append(A_mainrezult)
     if 'L_mainrezult' in globals():
         main_rezult.append(L_mainrezult)
+
 elif type_of_map=="compressor":
     main_rezult=[n_mainrezult,betta_mainrezult,G_mainrezult,PR_mainrezult,Eff_mainrezult]
 #7.1)проверим правильно ли работают функции интерполяции

@@ -187,9 +187,12 @@ elif command == 'print_plot':
         #                points_for_plot=[{'x': x, 'y': y}], title=parameters[0], xlabel='X', ylabel='Y',
         #                dpi=150, figure_size=(10, 10))
         # Fig.figure.savefig('data_for_torok/plot')
-        Fig = gr.Chart(points_for_scatter=[{'x':x,'y':y,'s':50,'c':'lavender'}],
-                       points_for_plot=[{'x': x, 'y': y,'lw':3}], fontsize=20,
-                       dpi=150, figure_size=(10, 10),color_ticklabels='white', color_fig='black', color_axes='black',)
+        #Fig = gr.Chart(points_for_scatter=[{'x':x,'y':y,'s':50}],
+        #               points_for_plot=[{'x': x, 'y': y,'lw':3}], fontsize=20,
+        #               dpi=150, figure_size=(10, 10), title='Мощность пускового устройства в зависимостит от оборотов', xlabel='Обороты', ylabel='N',)
+        Fig = gr.Chart(points_for_scatter=[{'x':x,'y':y,'s':50,'c':'orange'}],
+                        points_for_plot=[{'x': x, 'y': y,'lw':3,'c':'deepskyblue'}], fontsize=20,
+                        dpi=150, figure_size=(10, 10),color_ticklabels='white', color_fig='black', color_axes='black',)
         Fig.figure.savefig('data_for_torok/plot')
 
 
