@@ -338,7 +338,7 @@ class identification():
             self.ident_coefs[coef_key]=coef_value
         self.model.update_ident_coefs(self.ident_coefs)      
         solverLog.info(str(self.ident_coefs))
-        self.rezults_list=self.model.solve_modes()
+        self.rezults_list=self.model.solve_static_modes()
         self.compare_experimental_and_calculated_parameters()
         
         return self.errors['mid_error']

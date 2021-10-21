@@ -403,10 +403,25 @@ class Parser_formula():
                 _new_polish_formula.append(token)
         self.polish_formula=_new_polish_formula
 
+    #аналогично предыдущей функции, но она на выходе выдает true/false
+    def check_uncalculable(self):
+        uncalculable_found=False
+        for token in self.polish_formula:
+            if token[0]=='str':
+                uncalculable_found=not self.check_exist_parameter_in_obj(token[1])
+                if uncalculable_found:
+                    return True
+            elif token[0]=='udf':
+                _dict=token[1][1]
+                for key,val in _dict.items():
+                    uncalculable_found =not self.check_exist_parameter_in_obj(val)
+                    if uncalculable_found:
+                        return True
+        return uncalculable_found
+
+
     # ('str', 'compr.inlet.G')
     # ('udf', ('inlet_sigma', {'x': 'inlet.G_corr'}))
-
-
 
     # вспомогательная функция для преобразования строки, содержащей ссылку на параметр в tuple, где первое значение хранит указатель на объект, а второе значение - имя параметры этого объекта, значение которого нужно узнать. Так странно сделано из-за того, что в питоне есть mutable и immutable переменные
     # если скормить строку, в которой число - вернет float, если скормить tuple со ссылкой - попытаестя его вычислить
@@ -440,6 +455,7 @@ class Parser_formula():
         except ValueError:
             return False
 
+    #проверка существует ли параметр, заднный строкой
     def check_exist_parameter_in_obj(self,string):
         # rez=Parser_formula.BASE_LINK_TO_EXTRACT
         rez=self.base_link_to_extract
@@ -449,7 +465,10 @@ class Parser_formula():
                 rez=getattr(rez,val)
             else:
                 return False
-        return True
+        if np.isnan(rez):
+            return False
+        else:
+            return True
 
     #Функция, получает на вход итерируемый объект чисел и операторов в обратной польской нотации, возвращает результат вычисления:
     def calculate(self):
@@ -485,6 +504,7 @@ class Parser_formula():
                     solverLog.error(f'Error! Something wrong in function insert_values_in_arguments: undefined type of decoded_value: {type(decoded_value)}')
             else:
                 solverLog.error(f'ERROR: unknown name of argument {arg} in attempt to insert value {value} in formula: {self.name_of_function} = {self.string_formula}')
+
         return True #сигнализируем о том, что все аргументы вычислены
 
     def calc_numb(self,number):

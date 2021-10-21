@@ -1130,7 +1130,16 @@ class Combustor():
         self.Gair_in_burner=self.inlet.G+(G0+Gmid+G1)
         self.outlet.G=self.Gair_in_burner+self.G_fuel
         #efficiency_combustor(self.Gamma,self.Gamma_dp,self.eff_dp) - вариант вычисления по методике из gas Turbine Performance
-        self.eff= self.eff_func.calculate() * self.ident_eff
+        if self.eff_func.check_uncalculable(): #проверяем есть ли в формуле вычсиления полноты сгорания невычисляемые параметры (В ТВ7 так: полнота сгорания зависит от альфа, котрое вычисляется позже)
+            # TODO! костыль для климова, если функция полноты сгорания зависит от альфа, то попадаем сюда (так было в ТВ7-117)
+            self.alfa, self.outlet.mass_comp = td.Combustion_properties(mass_comp_air=self.inlet.mass_comp,
+                                                                mass_comp_fuel=self.mass_comp_fuel, G_fuel=self.G_fuel,
+                                                                G_air=self.Gair_in_burner, eff_brn=0.99)
+            self.eff = self.eff_func.calculate() * self.ident_eff
+        else:
+            self.eff= self.eff_func.calculate() * self.ident_eff
+
+
         self.alfa,self.outlet.mass_comp=td.Combustion_properties(mass_comp_air=self.inlet.mass_comp, mass_comp_fuel=self.mass_comp_fuel, G_fuel=self.G_fuel, G_air=self.Gair_in_burner, eff_brn=self.eff)
         # self.alfa,self.outlet.mass_comp=td.Combustion_properties(mass_comp_air=self.inlet.mass_comp, mass_comp_fuel=self.mass_comp_fuel, G_fuel=self.G_fuel, G_air=self.Gair_in_burner,eff_brn=self.eff_value,L0=self.L0)
         self.outlet.H=(self.H_fuel*self.G_fuel+self.inlet.H*self.Gair_in_burner)/(self.G_fuel+self.Gair_in_burner)

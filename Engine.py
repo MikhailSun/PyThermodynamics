@@ -203,13 +203,13 @@ class Engine():
         #дальше временный костыль - нужно убрать, см.тудушку 16
         if self.name_of_engine=='TV7-117':
             if np.round(self.ambient.external_conditions.V,4)>0:
-                self.Nsopla=self.devices["outletLA"].outlet.Impulse*self.ambient.external_conditions.V/0.8 #КПД винта для расчета эквивалентной мощности принимаем равным 0,8 в соответствии с письмом с письмом от Зайналова 8.02.2019
+                self.Nsopla=self.devices["out_LA"].outlet.Impulse*self.ambient.external_conditions.V/0.8 #КПД винта для расчета эквивалентной мощности принимаем равным 0,8 в соответствии с письмом с письмом от Зайналова 8.02.2019
             else:
-                self.Nsopla=0.91*self.devices["outletLA"].outlet.Impulse*0.1019716/1.3596*1000 #формула из описания алгоритма мат модели ТВ7-117СТ
-            self.Nekv=self.devices["pt"].N+self.Nsopla
-            self.Cekv=(self.devices["cmbstr"].G_fuel*3600)/(self.Nekv/1000)
-            self.Ce=(self.devices["cmbstr"].G_fuel)/(self.devices["pt"].N)
-            self.PR=self.devices["lpc"].PRtt*self.devices["hpc"].PRtt
+                self.Nsopla=0.91*self.devices["out_LA"].outlet.Impulse*0.1019716/1.3596*1000 #формула из описания алгоритма мат модели ТВ7-117СТ
+            self.Nekv=self.devices["st"].N+self.Nsopla
+            self.Cekv=(self.devices["ks"].G_fuel*3600)/(self.Nekv/1000)
+            self.Ce=(self.devices["ks"].G_fuel)/(self.devices["st"].N)
+            self.PR=self.devices["knd"].PRtt*self.devices["kvd"].PRtt
         if self.name_of_engine=='Jetcat':
             self.Thrust=self.devices["nozzle"].outlet.Impulse+(self.devices["nozzle"].outlet.Ps-self.devices['ambient'].external_conditions.Ps)*self.devices["nozzle"].outlet.F-self.devices['inlet'].inlet.G*self.devices['ambient'].external_conditions.V
             self.Cr=(self.devices["cmbstr"].G_fuel)/(self.Thrust)
@@ -630,10 +630,14 @@ class Engine():
         # else: #эта ветвь используется для одновального реактивного двигателя
         #     for rotor in list(self.balance_of_power_of_rotor):
         #         self.residuals['dN_'+rotor]=self.balance_of_power_of_rotor[rotor]/self.named_main_devices['first_turbine'].N #NB! здесь в знаменателе мощность первой турбины, что в общем не обязательно. Первая турбина выбрана, потому, что она есть всегда и обычно она самая мощная, относительно нее удобно переводить величины в относительный вид
-        for rotor in list(self.balance_of_power_of_rotor):
-            self.residuals['dN.'+rotor]=self.balance_of_power_of_rotor[rotor]/self.named_main_devices['first_turbine'].N #NB! здесь в знаменателе мощность первой турбины, что в общем не обязательно. Первая турбина выбрана, потому, что она есть всегда и обычно она самая мощная, относительно нее удобно переводить величины в относительный вид
+        # for rotor in list(self.balance_of_power_of_rotor):
+        #     self.residuals['dN.'+rotor]=self.balance_of_power_of_rotor[rotor]/self.named_main_devices['first_turbine'].N #NB! здесь в знаменателе мощность первой турбины, что в общем не обязательно. Первая турбина выбрана, потому, что она есть всегда и обычно она самая мощная, относительно нее удобно переводить величины в относительный вид
 
-
+        #если в двигателе только один вал, то невязка по балансу мощности формируется только в том случае, если пользователь задал мощность на выводном валу
+        #если в двигателе больше 1 вала, то исходим из того, что отбор мощности всегда осуществляется только от последнего по счету вала, а по всем предыдущим формируется баланс мощности
+        if self.amount_of_rotors>1:
+            for rotor in list(self.balance_of_power_of_rotor.keys())[:-1]:
+                self.residuals['dN.' + rotor] = self.balance_of_power_of_rotor[rotor] / self.named_main_devices['first_turbine'].N  # NB! здесь в знаменателе мощность первой турбины, что в общем не обязательно. Первая турбина выбрана, потому, что она есть всегда и обычно она самая мощная, относительно нее удобно переводить величины в относительный вид
 
         #далее просматриваем массив исходных данных заданных пользователем self.operating_mode и ищем там ключ(и), который задает еще одну невязку характеризующую режим работы двигателя (это ключ, который отсутствует в словаре self.arguments
         for key in self.operating_mode:

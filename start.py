@@ -22,7 +22,7 @@ solverLog.info(f'Python version: {sys.version}')
 
 #1) РАСЧЕТ СТАЦИОНАРНЫХ РЕЖИМОВ
 #ВЕРСИЯ ДЛЯ ПК    
-# Model0=eng.Engine(filename_of_input_data='input_data.dat') #исходная непосчитанная модель с заведенными в нее исходными данными
+Model0=eng.Engine(filename_of_input_data='input_data.dat') #исходная непосчитанная модель с заведенными в нее исходными данными
 # Model0=eng.Engine(filename_of_input_data='input_data.dat') #исходная непосчитанная модель с заведенными в нее исходными данными
 # Model0=eng.Engine() #исходная непосчитанная модель с заведенными в нее исходными данными
 #ВЕРСИЯ ДЛЯ ЗАПУСКА ЧЕРЕЗ КОМАНДНУЮ СТРОКУ
@@ -33,15 +33,15 @@ solverLog.info(f'Python version: {sys.version}')
 # ident_coefs={'ident.compr.G': 0.93, 'ident.compr.n': 1.025}
 # Model0.update_ident_coefs(ident_coefs)
 # parametric_study_rezults=Model0.parametric_study({'hpt.ident_Cap_value':[0.95,0.975,1,1.02,1.04,1.06,1.08,1.1]}, {'ident.SAS.3':[1.0,1.1,1.2,1.3,1.4,1.5,1.6,1.7,1.8]})
-# try:
-#     rezults=Model0.solve_static_modes()
-#     Model0.save_rezults_to_file(rezults_data=rezults,filename_where_to_save='results_thermodynamics.csv')
-#     Model0.make_graphics()
-#     # Model0.make_graphics_of_maps(rezults)
-#     solverLog.info(Model0.df)
-#     solverLog.info('Writing rezults: ok')
-# except:
-#     Model0.make_graphics()
+try:
+    rezults=Model0.solve_static_modes()
+    Model0.save_rezults_to_file(rezults_data=rezults,filename_where_to_save='results_thermodynamics.csv')
+    # Model0.make_graphics()
+    # Model0.make_graphics_of_maps(rezults)
+    solverLog.info(Model0.df)
+    solverLog.info('Writing rezults: ok')
+except:
+    Model0.make_graphics()
 
 # print(f'N={rezults[0].pt.N*1.3596/1000} (2800)')
 # print(f'Tztk={rezults[0].hpt.throttle.T} (1448)')
@@ -82,19 +82,25 @@ solverLog.info(f'Python version: {sys.version}')
     
 
 #2) УВЯЗКА ПО ЭКСПЕРИМЕНТАЛЬНЫМ ДАННЫМ
-A=ident.identification(filename='input_data.dat')#'input_data_for_identification.dat'
+# A=ident.identification(filename='input_data.dat')#'input_data_for_identification.dat'
 # ident_coefs={'ident.compr.G': 0.9199293628659231, 'ident.compr.Eff': 1.01, 'ident.compr.n': 1.0084960343438298, 'ident.hpt.Cap': 1.007383489301189, 'ident.hpt.Eff': 1.01, 'ident.hpt.n': 0.97, 'ident.pt.Cap': 1.0228798633190983, 'ident.pt.Eff': 1.01, 'ident.pt.n': 0.9967182066696666}
 # A.model.update_ident_coefs(ident_coefs)
-A.identificate()
-A.make_graphics()
+# A.identificate()
+# A.make_graphics()
 
 #3) СРАВНЕНИЕ ЭКСПЕРИМЕНТА И РАСЧЕТА
 # A=ident.identification('input_data.dat')
-# ident_coefs= {'ident.compr.G': 0.9144418488510423, 'ident.compr.Eff': 1.01, 'ident.compr.n': 1.0114248392035308, 'ident.hpt.Cap': 1.0489728162443575, 'ident.hpt.Eff': 1.01, 'ident.hpt.n': 0.9955705812248544, 'ident.pt.Cap': 1.024680027018844, 'ident.pt.Eff': 1.01, 'ident.pt.n': 0.9995930859246324}
+# ident_coefs={'ident.SAS.4': 0.9950633335938392, 'ident.SAS.6': 0.9889599856345496, 'ident.compr.G': 1.0039993641859233, 'ident.turb.Cap': 0.987014554823757, 'ident.turb.eff': 0.96885} #ГТЕ-170 увязка 07,09,2021
+# ident_coefs={'ident.SAS.4': 0.9533871616386512, 'ident.SAS.6': 0.9275653784594994, 'ident.compr.G': 1.01070129732038, 'ident.turb.Cap': 0.9890171288292251, 'ident.turb.eff': 0.9951835050911272}#ГТЕ-170 увязка 2 09.09.2021
+# ident_coefs={'ident.SAS.4': 0.8710033233545511, 'ident.SAS.6': 0.9637673344219013, 'ident.compr.G': 1.0115892259998487, 'ident.turb.Cap': 0.9928775001594915, 'ident.turb.eff': 0.99518744586849}  #ГТЕ-170 увязка 3 09.09.2021
+# ident_coefs={'ident.SAS.4': 0.959706131402832, 'ident.SAS.6': 0.9162754600428177, 'ident.compr.G': 1.0115165099691152, 'ident.turb.Cap': 0.9905530350587416, 'ident.turb.eff': 0.991739156289139, 'ident.turb.n': 0.9701}#ГТЕ-170 увязка 4 09.09.2021
+# ident_coefs={'ident.SAS.4': 1.0886431134498915, 'ident.SAS.6': 0.7595350684459232, 'ident.compr.G': 1.0120992916446894, 'ident.turb.Cap': 0.9969786900638693, 'ident.turb.eff': 0.9899020432904201, 'ident.turb.n': 0.9501}#ГТЕ-170 увязка 5 09.09.2021
 # A.model.update_ident_coefs(ident_coefs)
 # A.rezults_list=A.model.solve_static_modes()
 # A.compare_experimental_and_calculated_parameters()
 # print(A.errors['mid_error'])
+# dataframe=pd.DataFrame(A.errors['158MW'])
+# dataframe.to_excel('158.xlsx')
 
 #4) КОЭФФИЦИЕНТЫ ВЛИЯНИЯ
 # A=ident.identification('input_data.dat')
