@@ -1180,7 +1180,7 @@ class Channel():
         self.eff=np.nan
         self.Hs_isentropic_ideal=np.nan
         #TODO!!!NB!!! далее костыль - перепуск воздуха для ТВ7, НЕ ЗАБЫТЬ ИЗБАВИТЬСЯ ОТ НЕГО!
-        if engine.name_of_engine=='TV7-117' and self.name=='lpc_hpc_interduct':
+        if engine.name_of_engine=='TV7-117' and self.name=='inter_compr':
             _n_x=np.array([0,0.63,0.73,0.75,0.751])
             _v_y=np.array([0.1,0.1,0.0955,0.093,0.0])
             self.v_perepusk_TV7=interp1d(_n_x,_v_y,bounds_error=False,fill_value=(0.1,0.0))
@@ -1196,9 +1196,10 @@ class Channel():
         G0_out,Gmid_out,G1_out=engine.secondary_air_system.calculate_bleedout_combustor_and_channel(self,engine.arguments['Gref'])
         
         #TODO!!!NB!!! далее костыль - перепуск воздуха для ТВ7, НЕ ЗАБЫТЬ ИЗБАВИТЬСЯ ОТ НЕГО!
-        if engine.name_of_engine=='TV7-117' and self.name=='lpc_hpc_interduct':
+        if engine.name_of_engine=='TV7-117' and self.name=='inter_compr':
             _n_corr=self.upstream.n_corr
-            _G_in_ok=engine.secondary_air_system.section_for_Gref.G
+            # _G_in_ok=engine.secondary_air_system.section_for_Gref.G
+            _G_in_ok = engine.secondary_air_system.link_to_Gref
             self.perepusk=self.v_perepusk_TV7(_n_corr)*_G_in_ok
             G0_out-=-self.perepusk
         #TODO!!!NB!!! выше костыль - перепуск воздуха для ТВ7
@@ -1551,15 +1552,15 @@ class Secondary_Air_System():
                         Gbld=bleed_in_instance['G_abs_to'].item()
                         bleed_in_instance['G_rel_to']=Gbld/Gbld_0
                         if bleed_in_instance['G_rel_to']>1:
-                            print('Расход воздуха через вдув в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+' больше, чем расход отбора, чего не может быть! Отбор='+str(Gbld_0)+', вдув='+str(Gbld))
+                            print('Warning! Расход воздуха через вдув в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+' больше, чем расход отбора, чего не может быть! Отбор='+str(Gbld_0)+', вдув='+str(Gbld))
                     elif np.isfinite(bleed_in_instance['A_to']):#если задано A_to
-                        print('Неверно задана величина вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+'. Причина: пока что не реализован алгоритм задания величины отбора пропускной способностью G*T^0.5/P')
+                        print('Error! Неверно задана величина вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+'. Причина: пока что не реализован алгоритм задания величины отбора пропускной способностью G*T^0.5/P')
                         raise SystemExit
                     elif np.isfinite(bleed_in_instance['F_to']):#если задано F_to
-                        print('Неверно задана величина вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+'. Причина: пока что не реализован алгоритм задания величины отбора площадью F')
+                        print('Error! Неверно задана величина вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+'. Причина: пока что не реализован алгоритм задания величины отбора площадью F')
                         raise SystemExit
                     else:
-                        print('Неверно задана величина вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N']))
+                        print('Error! Неверно задана величина вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N']))
                         raise SystemExit
                     bleed_in_instance['P_rel_to']=0
                     bleed_in_instance['h_rel_to']=0
@@ -1605,11 +1606,11 @@ class Secondary_Air_System():
                 if np.isfinite(bleed_in_instance['P_rel_to']): #если задано P_rel_from 
                     if bleed_in_instance['P_rel_to']>0: #точка вдува в турбину может быть задана только через P_rel_to и только если значение P_rel_to>0
                         if bleed_in_instance['P_rel_to']>1:
-                            print('Давление в точке вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+' задано неверно. Относительное давление не может больше 1.')
+                            print('Error! Давление в точке вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+' задано неверно. Относительное давление не может больше 1.')
                             raise SystemExit
                         Pbld=P1+(P2-P1)*bleed_in_instance['P_rel_to'].item()      
                         if Pbld>Pbld_0:
-                            solverLog.info('Давление в точке вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+' больше, чем давление в точке отбора. Давление в точке вдува='+str(Pbld)+', давление в точке отбора='+str(Pbld_0))
+                            solverLog.info('Warning! Давление в точке вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+' больше, чем давление в точке отбора. Давление в точке вдува='+str(Pbld)+', давление в точке отбора='+str(Pbld_0))
                             solverLog.info('Искусственно задаем давление в точке вдува равным давлению в точке отбора. Если это сообщение появляется в финальной итерации, то возможна ошибка в расчете отбора.')
                             Pbld=Pbld_0
                             # raise SystemExit
@@ -1628,15 +1629,15 @@ class Secondary_Air_System():
                             Gbld=bleed_in_instance['G_abs_to'].item()
                             bleed_in_instance['G_rel_to']=Gbld/Gbld_0
                             if bleed_in_instance['G_rel_to']>1:
-                                print('Расход воздуха через вдув в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+' больше, чем расход отбора, чего не может быть! Отбор='+str(Gbld_0)+', вдув='+str(Gbld))
+                                print('Warning! Расход воздуха через вдув в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+' больше, чем расход отбора, чего не может быть! Отбор='+str(Gbld_0)+', вдув='+str(Gbld))
                         elif np.isfinite(bleed_in_instance['A_to']):#если задано A_to
-                            print('Неверно задана величина вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+'. Причина: пока что не реализован алгоритм задания величины отбора пропускной способностью G*T^0.5/P')
+                            print('Error! Неверно задана величина вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+'. Причина: пока что не реализован алгоритм задания величины отбора пропускной способностью G*T^0.5/P')
                             raise SystemExit
                         elif np.isfinite(bleed_in_instance['F_to']):#если задано F_to
-                            print('Неверно задана величина вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+'. Причина: пока что не реализован алгоритм задания величины отбора площадью F')
+                            print('Error! Неверно задана величина вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+'. Причина: пока что не реализован алгоритм задания величины отбора площадью F')
                             raise SystemExit
                         else:
-                            print('Неверно задана величина вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N']))
+                            print('Error! Неверно задана величина вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N']))
                             raise SystemExit
 
                         if bleed_in_instance['P_rel_to']>0 and bleed_in_instance['P_rel_to']<1:
@@ -1687,7 +1688,6 @@ class Secondary_Air_System():
                     Hbld_0=device.inlet.H
                 Gbld_0=self.air_bleed_out[_row_index]['G_from'].item()                    
                 if np.isnan(Gbld_0):
-                    
                     Gbld_0=0.00000001
                 mass_comp_bld=self.air_bleed_out[_row_index]['mass_comp'][0]
                 if np.isnan(mass_comp_bld[0]):
@@ -1698,11 +1698,11 @@ class Secondary_Air_System():
                 #точка вдува в канал может быть задана только относительным давлением
                 if np.isfinite(bleed_in_instance['P_rel_to']): #если задано P_rel_from (!!!пока не точно, но вроде бы если отбор не от компрессора и не от турбины, то лучше его через P_rel_from не задавать!!! - надо подумать и проверить)
                     if bleed_in_instance['P_rel_to']>1 or bleed_in_instance['P_rel_to']<0:
-                        print('Давление в точке вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+' задано неверно. Относительное давление не может больше 1 или меньше 0.')
+                        print('Error! Давление в точке вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+' задано неверно. Относительное давление не может больше 1 или меньше 0.')
                         raise SystemExit
                     Pbld=P1+(P2-P1)*bleed_in_instance['P_rel_to'].item()      
                     if Pbld>Pbld_0:
-                        solverLog.info('Давление в точке вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+' больше, чем давление в точке отбора. Давление в точке вдува='+str(Pbld)+', давление в точке отбора='+str(Pbld_0))
+                        solverLog.info('Warning! Давление в точке вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+' больше, чем давление в точке отбора. Давление в точке вдува='+str(Pbld)+', давление в точке отбора='+str(Pbld_0))
                         solverLog.info('Искусственно задаем давление в точке вдува равным давлению в точке отбора. Если это сообщение появляется в финальной итерации, то возможна ошибка в расчете отбора.')
                         Pbld=Pbld_0
 #                        raise SystemExit
@@ -1714,7 +1714,7 @@ class Secondary_Air_System():
                         Tbld=Tbld_0
                         hbld=Hbld_0
                 else:
-                    print('Давление в точке вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+' задано неверно. Должно быть задано значение P_rel_to.')
+                    print('Error! Давление в точке вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+' задано неверно. Должно быть задано значение P_rel_to.')
                     raise SystemExit
 
                 #проверяем чем задана величина отбора, она может быть задана относительным расходом G_rel_from, абсолютным G_abs_from, площадью F_from или пропускной способностью A_from
@@ -1725,15 +1725,15 @@ class Secondary_Air_System():
                     Gbld=bleed_in_instance['G_abs_to'].item()
                     bleed_in_instance['G_rel_to']=Gbld/Gbld_0
                     if bleed_in_instance['G_rel_to']>1:
-                        print('Расход воздуха через вдув в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+' больше, чем расход отбора, чего не может быть! Отбор='+str(Gbld_0)+', вдув='+str(Gbld))
+                        print('Warning! Расход воздуха через вдув в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+' больше, чем расход отбора, чего не может быть! Отбор='+str(Gbld_0)+', вдув='+str(Gbld))
                 elif np.isfinite(bleed_in_instance['A_to']):#если задано A_to
-                    print('Неверно задана величина вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+'. Причина: пока что не реализован алгоритм задания величины отбора пропускной способностью G*T^0.5/P')
+                    print('Error! Неверно задана величина вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+'. Причина: пока что не реализован алгоритм задания величины отбора пропускной способностью G*T^0.5/P')
                     raise SystemExit
                 elif np.isfinite(bleed_in_instance['F_to']):#если задано F_to
-                    print('Неверно задана величина вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+'. Причина: пока что не реализован алгоритм задания величины отбора площадью F')
+                    print('Error! Неверно задана величина вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N'])+'. Причина: пока что не реализован алгоритм задания величины отбора площадью F')
                     raise SystemExit
                 else:
-                    print('Неверно задана величина вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N']))
+                    print('Error! Неверно задана величина вдува в узел '+name_of_device+" от отбора №"+str(bleed_in_instance['N']))
                     raise SystemExit
                 bleed_in_instance['G_to']=Gbld
                 bleed_in_instance['h_to']=hbld
@@ -1764,7 +1764,11 @@ class Secondary_Air_System():
                 P1=device.inlet.P
                 T1=device.inlet.T
                 H1=device.inlet.H
-                P2=device.outlet.P
+                # P2=device.outlet.P
+                if type(device).__name__=='Combustor':
+                    P2 = device.outlet.P
+                else:
+                    P2 = device.outlet_ideal.P
                 mass_comp_bld=device.inlet.mass_comp               
                 #в канале и КС точка отбора может быть задана толоько относительным давлением. Далее извлекаем из массива bleed_out_instance чем задан отбор в данном случае и в зависимости от этого считаем параметры в точке отбора
                 if np.isfinite(bleed_out_instance['P_rel_from']): 
@@ -1772,7 +1776,8 @@ class Secondary_Air_System():
                     Tbld=T1
                     hbld=H1
                 else:
-                    print('Неверно задана точка отбора №'+str(bleed_out_instance['N']+'. В канале и камере сгорания точка отбора может задаваться только относительным давлением P_rel_from'))
+                    # print('Неверно задана точка отбора №'+str(bleed_out_instance['N']+'. В канале и камере сгорания точка отбора может задаваться только относительным давлением P_rel_from'))
+                    print(f'Неверно задана точка отбора №{bleed_out_instance["N"]}. В канале и камере сгорания точка отбора может задаваться только относительным давлением P_rel_from')
                     raise SystemExit
                 #проверяем чем задана величина отбора, она может быть задана относительным расходом G_rel_from, абсолютным G_abs_from, площадью F_from или пропускной способностью A_from
                 # if np.isfinite(bleed_out_instance['G_rel_from']):#если задано G_rel_from

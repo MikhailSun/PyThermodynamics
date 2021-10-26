@@ -199,7 +199,10 @@ class Engine():
             udf.base_link_to_extract=self# обновляем ссылку на объект откуда формулы будут брать числовые значения
 
         for name, device in self.devices.items():
-            device.calculate(self)
+            try:
+                device.calculate(self)
+            except:
+                print(f"Error: some troubles in '{name}'")
         #дальше временный костыль - нужно убрать, см.тудушку 16
         if self.name_of_engine=='TV7-117':
             if np.round(self.ambient.external_conditions.V,4)>0:
