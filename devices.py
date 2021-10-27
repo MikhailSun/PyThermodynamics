@@ -948,6 +948,11 @@ class Turbine():
         self.betta_id=initial_data['amount_of_betta']
         
         self.Re_dp=(1.019716e-005*self.P_inlet_design_point)/td.Dyn_visc_klimov(self.T_throttle_design_point)/(np.sqrt(self.T_throttle_design_point)) #TODO!!! проверить физичность
+        #TODO!  костыль для ТВ7 - поправки для кпд тс по ПиТ
+        if engine.name_of_engine=='TV7-117' and self.name=='st':
+            _PRtt_x=np.array([1.35, 1.51, 1.55, 1.59, 1.65, 1.7, 1.81, 1.875, 1.94, 2.02, 2.1, 2.275, 2.465, 2.665, 2.725, 10])
+            _Aeff_y=np.array([0.824, 0.846, 0.851, 0.856, 0.864, 0.871, 0.885, 0.894, 0.903, 0.913, 0.926, 0.949, 0.97, 0.99, 1., 1.])
+            self.A_eff_pt_TV7=interp1d(_PRtt_x,_Aeff_y,bounds_error=False,fill_value=(0.824,1.0))
 
     # @property
     # def eff_mech(self):
@@ -962,7 +967,7 @@ class Turbine():
     #     if self.eff_mech_map is np.nan:
     #         solverLog.info(f'Error! В исходных данных для узла {self.name} не задана характеристика механического кпд eff_mech')
     #         raise SystemExit
-#        self.G_inlet_corr_map=np.nan #попробуем не использовать невязку по приведенному расходу между расчетной венличиной и характеристикой
+
     def calculate(self,engine):
         #!!!ввести проверку на наличие необходимого минимума данных для начала расчета
 #        self.inlet.calculate() #по возможности уточняем уже известные параметры если для этого достаточно данных
@@ -998,7 +1003,11 @@ class Turbine():
 #это корркетный вариант расчета поправки к PR (см.TODO чуть выше)  self.PRtt=self.A_PR_Re_value*(float(self.PR_map(self.n_corr,self.betta))-1.0)+1.0#из характеристики ищем PR
         # self.A_eff_PR_value=self.A_eff_PR.calculate()
         # self.efftt=self.A_eff_Re_value*self.A_eff_PR_value*self.ident_eff_value*float(self.eff_map(self.n_corr/self.ident_n_value,self.betta))#из характеристики ищем кпд
-        self.efftt = self.A_eff_Re_value * self.ident_eff * float(self.eff_map(self.n_corr / self.ident_n, self.betta))  # из характеристики ищем кпд
+        if engine.name_of_engine == 'TV7-117' and self.name == 'st':
+            A_eff_pt=self.A_eff_pt_TV7(self.PRtt) #костыль для тв7
+        else:
+            A_eff_pt=1.0
+        self.efftt = A_eff_pt*self.A_eff_Re_value * self.ident_eff * float(self.eff_map(self.n_corr / self.ident_n, self.betta))  # из характеристики ищем кпд
         self.Alfa_outlet=self.A_A_Re_value*self.ident_A*float(self.A_map(self.n_corr/self.ident_n,self.betta))
         self.Lambda_outlet=self.A_L_Re_value*self.ident_L*float(self.L_map(self.n_corr/self.ident_n,self.betta))
         self.outlet.P=self.inlet.P/self.PRtt
