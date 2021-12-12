@@ -110,7 +110,8 @@ class Preloader():
                 if self.currentSectionName == "Functions":
                     _func_object=prs.Parser_formula()
                     _func_object.prepare_formula(line.split('#',1)[0].strip())
-                    f_name = re.match(r'(\S+)\((\S+)\)', a[0])
+                    # f_name = re.match(r'(\S+)\((\S+)\)', a[0])
+                    f_name = re.match(r'(\S+)\((\S*)\)', a[0])
                     funcName = f_name.group(1)
                     # funcDecl = a[1]
                     # _uf = uf.UserFunction(funcName, a[0], funcDecl, None, 2)
