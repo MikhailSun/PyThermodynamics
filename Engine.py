@@ -191,7 +191,7 @@ class Engine():
             self.Cekv=np.nan#эквивалентный удельный расход топлива
             self.Ce=np.nan
             self.PR=np.nan
-        if self.name_of_engine=='GTE-170':
+        if self.name_of_engine=='GTE-170-1':
             self.Ne=np.nan
 
     def calculate(self):
@@ -216,7 +216,7 @@ class Engine():
         if self.name_of_engine=='Jetcat':
             self.Thrust=self.devices["nozzle"].outlet.Impulse+(self.devices["nozzle"].outlet.Ps-self.devices['ambient'].external_conditions.Ps)*self.devices["nozzle"].outlet.F-self.devices['inlet'].inlet.G*self.devices['ambient'].external_conditions.V
             self.Cr=(self.devices["cmbstr"].G_fuel)/(self.Thrust)
-        if self.name_of_engine=='GTE-170':
+        if self.name_of_engine=='GTE-170-1':
             self.Ne=self.turb.N+self.compr.N
             # self.user_defined_formulas['control_law'].insert_values_in_arguments(Comprangle=self.compr.angle,Th=self.inl.inlet.T,Tturbout=self.turb.outlet.T)
             # self.user_defined_formulas['control_law'].insert_values_in_arguments(Th=self.inl.inlet.T,

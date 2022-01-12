@@ -728,7 +728,7 @@ class Compressor():
         self.A_eff_Re_value=np.nan
 
          #TODO!!! Временный костыль!!! убоать! 
-        if engine.name_of_engine!='GTE-170':
+        if engine.name_of_engine!='GTE-170-1':
             self.G_map=initial_data[name+'.G_map']
             self.PR_map=initial_data[name+'.PR_map']
             self.eff_map=initial_data[name+'.eff_map']
