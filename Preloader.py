@@ -147,16 +147,49 @@ class Preloader():
     #     return self.preInitialData[val]
 
     def getCompressorMap(self, name, data):
-        solverLog.info('Compressor map of '+name+': '+self.preInitialData[name])
-        data[f"{name}.G_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "compressor")['G_function']
-        data[f"{name}.PR_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "compressor")['PR_function']
-        data[f"{name}.eff_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "compressor")['eff_function']
+        # solverLog.info('Compressor map of '+name+': '+self.preInitialData[name])
+        solverLog.info('Compressor map loading...')
+        #сначала пробуем искать по относительному пути:
+        abs_path = os.getcwd() + '\\' + self.preInitialData[name]
+        original_path=self.preInitialData[name]
+        if os.path.isfile(original_path):
+            #TODO! костыль для ГТЭ-170
+            kostyl='GTE-170' if 'GTE-170' in data['name'] else ''
+
+            data[f"{name}.G_map"] = dev.import_map_function(original_path, "compressor", kostyl=kostyl)['G_function']
+            data[f"{name}.PR_map"] = dev.import_map_function(original_path, "compressor", kostyl=kostyl)['PR_function']
+            data[f"{name}.eff_map"] = dev.import_map_function(original_path, "compressor", kostyl=kostyl)['eff_function']
+            solverLog.info('Compressor map of "' + name + '": ' + original_path)
+        elif os.path.isfile(abs_path):
+            data[f"{name}.G_map"] = dev.import_map_function(abs_path, "compressor")['G_function']
+            data[f"{name}.PR_map"] = dev.import_map_function(abs_path, "compressor")['PR_function']
+            data[f"{name}.eff_map"] = dev.import_map_function(abs_path, "compressor")['eff_function']
+            solverLog.info('Compressor map of "' + name + '": ' + abs_path)
+        else:
+            solverLog.info(f"Error! Can't find compressor map of '{name}': {self.preInitialData[name]}")
 
     def getTurbineMap(self, name, data):
-        solverLog.info('Turbine map of '+name+': '+self.preInitialData[name])
-        data[f"{name}.Capacity_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "turbine")['G_function']
-        data[f"{name}.PR_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "turbine")['PR_function']
-        data[f"{name}.eff_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "turbine")['eff_function']
-        data[f"{name}.A_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "turbine")['Alfa_function']
-        data[f"{name}.L_map"] = dev.import_map_function(os.getcwd()+'\\'+self.preInitialData[name], "turbine")['Lambda_function']
+        solverLog.info('Turbine map loading...')
+        # solverLog.info('Turbine map of '+name+': '+self.preInitialData[name])
+        abs_path = os.getcwd() + '\\' + self.preInitialData[name]
+        original_path=self.preInitialData[name]
+        if os.path.isfile(original_path):
+            data[f"{name}.Capacity_map"] = dev.import_map_function(original_path, "turbine")['G_function']
+            data[f"{name}.PR_map"] = dev.import_map_function(original_path, "turbine")['PR_function']
+            data[f"{name}.eff_map"] = dev.import_map_function(original_path, "turbine")['eff_function']
+            data[f"{name}.A_map"] = dev.import_map_function(original_path, "turbine")['Alfa_function']
+            data[f"{name}.L_map"] = dev.import_map_function(original_path, "turbine")['Lambda_function']
+            solverLog.info('Turbine map of "' + name + '": ' + original_path)
+        elif os.path.isfile(abs_path):
+            data[f"{name}.Capacity_map"] = dev.import_map_function(abs_path, "turbine")['G_function']
+            data[f"{name}.PR_map"] = dev.import_map_function(abs_path, "turbine")['PR_function']
+            data[f"{name}.eff_map"] = dev.import_map_function(abs_path, "turbine")['eff_function']
+            data[f"{name}.A_map"] = dev.import_map_function(abs_path, "turbine")['Alfa_function']
+            data[f"{name}.L_map"] = dev.import_map_function(abs_path, "turbine")['Lambda_function']
+            solverLog.info('Turbine map of "' + name + '": ' + abs_path)
+        else:
+            solverLog.info(f"Error! Can't find turbine map of '{name}': {self.preInitialData[name]}")
+
+
+
 

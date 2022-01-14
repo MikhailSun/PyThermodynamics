@@ -728,46 +728,46 @@ class Compressor():
         self.A_eff_Re_value=np.nan
 
          #TODO!!! Временный костыль!!! убоать! 
-        if engine.name_of_engine!='GTE-170-1':
-            self.G_map=initial_data[name+'.G_map']
-            self.PR_map=initial_data[name+'.PR_map']
-            self.eff_map=initial_data[name+'.eff_map']
-        else:
-            with open(os.getcwd()+'/'+'maps/GTE-170/2020_11_12_compr_var1/GTE170 Compressor CFD 2020_11.dat', 'rb') as f:
-                data_map = pickle.load(f)
-            Gminus3=data_map['Gminus3']
-            Gplus168=data_map['Gplus168']
-            Gplus30=data_map['Gplus30']
-            PRminus3=data_map['PRminus3']
-            PRplus168=data_map['PRplus168']
-            PRplus30=data_map['PRplus30']
-            effminus3=data_map['Effminus3']
-            effplus168=data_map['Effplus168']
-            effplus30=data_map['Effplus30']
-            
-            def G_map(n,betta,angle):
-                x_angle=np.array([3.0,-13.8,-30.0])
-                y_G=np.array([Gminus3(n,betta)[0][0],Gplus168(n,betta)[0][0],Gplus30(n,betta)[0][0]])
-                G_f=np.poly1d(np.polyfit(x_angle,y_G,2))
-                _angle=3.0 if angle>3.0 else (-30.0 if angle<-30.0 else angle)
-                return G_f(_angle)
-            self.G_map=G_map
-            
-            def PR_map(n,betta,angle):
-                x_angle=np.array([3.0,-13.8,-30.0])
-                y_PR=np.array([PRminus3(n,betta)[0][0],PRplus168(n,betta)[0][0],PRplus30(n,betta)[0][0]])
-                PR_f=np.poly1d(np.polyfit(x_angle,y_PR,2))
-                _angle=3.0 if angle>3.0 else (-30.0 if angle<-30.0 else angle)
-                return PR_f(_angle)
-            self.PR_map=PR_map
-
-            def eff_map(n,betta,angle):
-                x_angle=np.array([3.0,-13.8,-30.0])
-                y_eff=np.array([effminus3(n,betta)[0][0],effplus168(n,betta)[0][0],effplus30(n,betta)[0][0]])
-                eff_f=np.poly1d(np.polyfit(x_angle,y_eff,2))
-                _angle=3.0 if angle>3.0 else (-30.0 if angle<-30.0 else angle)
-                return eff_f(_angle)
-            self.eff_map=eff_map
+        # if engine.name_of_engine!='GTE-170-1':
+        self.G_map=initial_data[name+'.G_map']
+        self.PR_map=initial_data[name+'.PR_map']
+        self.eff_map=initial_data[name+'.eff_map']
+        # else:
+        #     with open(os.getcwd()+'/'+'maps/GTE-170/2020_11_12_compr_var1/GTE170 Compressor CFD 2020_11.dat', 'rb') as f:
+        #         data_map = pickle.load(f)
+        #     Gminus3=data_map['Gminus3']
+        #     Gplus168=data_map['Gplus168']
+        #     Gplus30=data_map['Gplus30']
+        #     PRminus3=data_map['PRminus3']
+        #     PRplus168=data_map['PRplus168']
+        #     PRplus30=data_map['PRplus30']
+        #     effminus3=data_map['Effminus3']
+        #     effplus168=data_map['Effplus168']
+        #     effplus30=data_map['Effplus30']
+        #
+        #     def G_map(n,betta,angle):
+        #         x_angle=np.array([3.0,-13.8,-30.0])
+        #         y_G=np.array([Gminus3(n,betta)[0][0],Gplus168(n,betta)[0][0],Gplus30(n,betta)[0][0]])
+        #         G_f=np.poly1d(np.polyfit(x_angle,y_G,2))
+        #         _angle=3.0 if angle>3.0 else (-30.0 if angle<-30.0 else angle)
+        #         return G_f(_angle)
+        #     self.G_map=G_map
+        #
+        #     def PR_map(n,betta,angle):
+        #         x_angle=np.array([3.0,-13.8,-30.0])
+        #         y_PR=np.array([PRminus3(n,betta)[0][0],PRplus168(n,betta)[0][0],PRplus30(n,betta)[0][0]])
+        #         PR_f=np.poly1d(np.polyfit(x_angle,y_PR,2))
+        #         _angle=3.0 if angle>3.0 else (-30.0 if angle<-30.0 else angle)
+        #         return PR_f(_angle)
+        #     self.PR_map=PR_map
+        #
+        #     def eff_map(n,betta,angle):
+        #         x_angle=np.array([3.0,-13.8,-30.0])
+        #         y_eff=np.array([effminus3(n,betta)[0][0],effplus168(n,betta)[0][0],effplus30(n,betta)[0][0]])
+        #         eff_f=np.poly1d(np.polyfit(x_angle,y_eff,2))
+        #         _angle=3.0 if angle>3.0 else (-30.0 if angle<-30.0 else angle)
+        #         return eff_f(_angle)
+        #     self.eff_map=eff_map
         #TODO!!! Временный костыль!!! убоать! 
             
         
@@ -1985,21 +1985,58 @@ class Secondary_Air_System():
 #t_A_f=(RectBivariateSpline(t_n_map, t_betta_map, t_A_map, bbox=[min(t_n_map), max(t_n_map), min(t_betta_map), max(t_betta_map)], kx=3, ky=3, s=0))
 #t_L_f=(RectBivariateSpline(t_n_map, t_betta_map, t_L_map, bbox=[min(t_n_map), max(t_n_map), min(t_betta_map), max(t_betta_map)], kx=3, ky=3, s=0))
 
-def import_map_function(filename,maptype):
+def import_map_function(filename,maptype,kostyl=''):
     with open(filename, 'rb') as f:
-        data_map = pickle.load(f) 
+        data_map = pickle.load(f)
     if maptype=='compressor':
-        n_map=data_map[0]
-        betta_map=data_map[1]
-        G_map=data_map[2]
-        PR_map=data_map[3]
-        eff_map=data_map[4]
-        eff_f=(RectBivariateSpline( n_map,betta_map, eff_map, bbox=[min(n_map), max(n_map), min(betta_map), max(betta_map)], kx=3, ky=3, s=0))
-        G_f=(RectBivariateSpline( n_map,betta_map, G_map, bbox=[min(n_map), max(n_map), min(betta_map), max(betta_map)], kx=3, ky=3, s=0))
-        PR_f=(RectBivariateSpline( n_map,betta_map, PR_map, bbox=[min(n_map), max(n_map), min(betta_map), max(betta_map)], kx=3, ky=3, s=0))
-        rezult=dict(eff_function=eff_f,
-                    G_function=G_f,
-                    PR_function=PR_f)
+        # TODO! костыль для ГТЭ-170
+        if kostyl == 'GTE-170':
+            Gminus3 = data_map['Gminus3']
+            Gplus168 = data_map['Gplus168']
+            Gplus30 = data_map['Gplus30']
+            PRminus3 = data_map['PRminus3']
+            PRplus168 = data_map['PRplus168']
+            PRplus30 = data_map['PRplus30']
+            effminus3 = data_map['Effminus3']
+            effplus168 = data_map['Effplus168']
+            effplus30 = data_map['Effplus30']
+
+            def G_map(n, betta, angle):
+                x_angle = np.array([3.0, -13.8, -30.0])
+                y_G = np.array([Gminus3(n, betta)[0][0], Gplus168(n, betta)[0][0], Gplus30(n, betta)[0][0]])
+                G_f = np.poly1d(np.polyfit(x_angle, y_G, 2))
+                _angle = 3.0 if angle > 3.0 else (-30.0 if angle < -30.0 else angle)
+                return G_f(_angle)
+
+            def PR_map(n, betta, angle):
+                x_angle = np.array([3.0, -13.8, -30.0])
+                y_PR = np.array([PRminus3(n, betta)[0][0], PRplus168(n, betta)[0][0], PRplus30(n, betta)[0][0]])
+                PR_f = np.poly1d(np.polyfit(x_angle, y_PR, 2))
+                _angle = 3.0 if angle > 3.0 else (-30.0 if angle < -30.0 else angle)
+                return PR_f(_angle)
+
+            def eff_map(n, betta, angle):
+                x_angle = np.array([3.0, -13.8, -30.0])
+                y_eff = np.array([effminus3(n, betta)[0][0], effplus168(n, betta)[0][0], effplus30(n, betta)[0][0]])
+                eff_f = np.poly1d(np.polyfit(x_angle, y_eff, 2))
+                _angle = 3.0 if angle > 3.0 else (-30.0 if angle < -30.0 else angle)
+                return eff_f(_angle)
+
+            rezult=dict(eff_function=eff_map,
+                        G_function=G_map,
+                        PR_function=PR_map)
+        else:
+            n_map=data_map[0]
+            betta_map=data_map[1]
+            G_map=data_map[2]
+            PR_map=data_map[3]
+            eff_map=data_map[4]
+            eff_f=(RectBivariateSpline( n_map,betta_map, eff_map, bbox=[min(n_map), max(n_map), min(betta_map), max(betta_map)], kx=3, ky=3, s=0))
+            G_f=(RectBivariateSpline( n_map,betta_map, G_map, bbox=[min(n_map), max(n_map), min(betta_map), max(betta_map)], kx=3, ky=3, s=0))
+            PR_f=(RectBivariateSpline( n_map,betta_map, PR_map, bbox=[min(n_map), max(n_map), min(betta_map), max(betta_map)], kx=3, ky=3, s=0))
+            rezult=dict(eff_function=eff_f,
+                        G_function=G_f,
+                        PR_function=PR_f)
     elif maptype=='turbine':
         n_map=data_map[0]
         betta_map=data_map[1]
