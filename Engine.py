@@ -204,6 +204,7 @@ class Engine():
                 device.calculate(self)
             except:
                 print(f"Error: some troubles in '{name}'")
+                break
         #дальше временный костыль - нужно убрать, см.тудушку 16
         if self.name_of_engine=='TV7-117':
             if np.round(self.ambient.external_conditions.V,4)>0:

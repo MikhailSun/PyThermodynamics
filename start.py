@@ -22,7 +22,7 @@ solverLog.info(f'Python version: {sys.version}')
 
 #1) РАСЧЕТ СТАЦИОНАРНЫХ РЕЖИМОВ
 #ВЕРСИЯ ДЛЯ ПК    
-Model0=eng.Engine(filename_of_input_data='testGTE-170_input_data.dat') #исходная непосчитанная модель с заведенными в нее исходными данными
+Model0=eng.Engine(filename_of_input_data='input_data.dat') #исходная непосчитанная модель с заведенными в нее исходными данными
 # Model0=eng.Engine(filename_of_input_data='input_data.dat') #исходная непосчитанная модель с заведенными в нее исходными данными
 # Model0=eng.Engine() #исходная непосчитанная модель с заведенными в нее исходными данными
 #ВЕРСИЯ ДЛЯ ЗАПУСКА ЧЕРЕЗ КОМАНДНУЮ СТРОКУ
@@ -36,7 +36,7 @@ Model0=eng.Engine(filename_of_input_data='testGTE-170_input_data.dat') #исхо
 try:
     rezults=Model0.solve_static_modes()
     Model0.save_rezults_to_file(rezults_data=rezults,filename_where_to_save='results_thermodynamics.csv')
-    # Model0.make_graphics()
+    Model0.make_graphics()
     # Model0.make_graphics_of_maps(rezults)
     solverLog.info(Model0.df)
     solverLog.info('Writing rezults: ok')

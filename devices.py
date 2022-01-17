@@ -1122,6 +1122,18 @@ class Combustor():
         self.Hu_real = np.nan
         self.Hu_ideal_298 = td.Low_heat_of_combustion(mass_comp_air=engine.ambient.mass_comp_dry_air,mass_comp_fuel=self.mass_comp_fuel,L0=self.L0)
 
+        if np.isnan(self.L0_manual):
+            solverLog.info(f"Stoichiometric const L0 = {self.L0} (auto)")
+        else:
+            solverLog.info(f"Stoichiometric const L0 = {self.L0} (manual)")
+
+        if self.mass_comp_fuel[6] > 0.999 and self.mass_comp_fuel[7] < 0.001:
+            solverLog.info(f"Fuel - kerosene. Mixture: {self.mass_comp_fuel}")
+        elif self.mass_comp_fuel[7] > 0.999 and self.mass_comp_fuel[6] < 0.001:
+            solverLog.info(f"Fuel - methane. Mixture: {self.mass_comp_fuel}")
+        else:
+            solverLog.info(f"Error! Unknown fuel!")
+
     def calculate(self,engine):
 #        должны быть заданы Pinlet, Tinlet, Tfuel, Gfuel, Gair, dp(Ginlet, Pinlet, Tinlet)
         
