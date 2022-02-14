@@ -2002,41 +2002,93 @@ def import_map_function(filename,maptype,kostyl=''):
         data_map = pickle.load(f)
     if maptype=='compressor':
         # TODO! костыль для ГТЭ-170
-        if kostyl == 'GTE-170':
-            Gminus3 = data_map['Gminus3']
-            Gplus168 = data_map['Gplus168']
-            Gplus30 = data_map['Gplus30']
-            PRminus3 = data_map['PRminus3']
-            PRplus168 = data_map['PRplus168']
-            PRplus30 = data_map['PRplus30']
-            effminus3 = data_map['Effminus3']
-            effplus168 = data_map['Effplus168']
-            effplus30 = data_map['Effplus30']
+        # if kostyl == 'GTE-170':
+        #     Gminus3 = data_map['Gminus3']
+        #     Gplus168 = data_map['Gplus168']
+        #     Gplus30 = data_map['Gplus30']
+        #     PRminus3 = data_map['PRminus3']
+        #     PRplus168 = data_map['PRplus168']
+        #     PRplus30 = data_map['PRplus30']
+        #     effminus3 = data_map['Effminus3']
+        #     effplus168 = data_map['Effplus168']
+        #     effplus30 = data_map['Effplus30']
+        #
+        #     def G_map(n, betta, angle):
+        #         x_angle = np.array([3.0, -13.8, -30.0])
+        #         y_G = np.array([Gminus3(n, betta)[0][0], Gplus168(n, betta)[0][0], Gplus30(n, betta)[0][0]])
+        #         G_f = np.poly1d(np.polyfit(x_angle, y_G, 2))
+        #         _angle = 3.0 if angle > 3.0 else (-30.0 if angle < -30.0 else angle)
+        #         return G_f(_angle)
+        #
+        #     def PR_map(n, betta, angle):
+        #         x_angle = np.array([3.0, -13.8, -30.0])
+        #         y_PR = np.array([PRminus3(n, betta)[0][0], PRplus168(n, betta)[0][0], PRplus30(n, betta)[0][0]])
+        #         PR_f = np.poly1d(np.polyfit(x_angle, y_PR, 2))
+        #         _angle = 3.0 if angle > 3.0 else (-30.0 if angle < -30.0 else angle)
+        #         return PR_f(_angle)
+        #
+        #     def eff_map(n, betta, angle):
+        #         x_angle = np.array([3.0, -13.8, -30.0])
+        #         y_eff = np.array([effminus3(n, betta)[0][0], effplus168(n, betta)[0][0], effplus30(n, betta)[0][0]])
+        #         eff_f = np.poly1d(np.polyfit(x_angle, y_eff, 2))
+        #         _angle = 3.0 if angle > 3.0 else (-30.0 if angle < -30.0 else angle)
+        #         return eff_f(_angle)
+        #
+        #     rezult=dict(eff_function=eff_map,
+        #                 G_function=G_map,
+        #                 PR_function=PR_map)
+        if isinstance(data_map, dict):
+            x_angle=[]
+            dict_with_functions={}
+            for angle, data_for_map in data_map.items():
+                x_angle.append(angle)
+                # [n_mainrezult, betta_mainrezult, G_mainrezult, PR_mainrezult, Eff_mainrezult, A_mainrezult, L_mainrezult]
+                n_map = data_for_map[0]
+                betta_map = data_for_map[1]
+                G_map = data_for_map[2]
+                PR_map = data_for_map[3]
+                eff_map = data_for_map[4]
+                G_f = (RectBivariateSpline(n_map, betta_map, G_map,
+                                           bbox=[min(n_map), max(n_map), min(betta_map), max(betta_map)], kx=3, ky=3,
+                                           s=0))
+                PR_f = (RectBivariateSpline(n_map, betta_map, PR_map,
+                                            bbox=[min(n_map), max(n_map), min(betta_map), max(betta_map)], kx=3, ky=3,
+                                            s=0))
+                eff_f = (RectBivariateSpline(n_map, betta_map, eff_map,
+                                             bbox=[min(n_map), max(n_map), min(betta_map), max(betta_map)], kx=3, ky=3,
+                                             s=0))
+                dict_with_functions[angle]={'G_f':G_f,
+                                            'PR_f':PR_f,
+                                            'eff_f':eff_f}
 
             def G_map(n, betta, angle):
-                x_angle = np.array([3.0, -13.8, -30.0])
-                y_G = np.array([Gminus3(n, betta)[0][0], Gplus168(n, betta)[0][0], Gplus30(n, betta)[0][0]])
+                y_G=[fun['G_f'](n,betta)[0][0] for angle,fun in dict_with_functions.items()]
                 G_f = np.poly1d(np.polyfit(x_angle, y_G, 2))
-                _angle = 3.0 if angle > 3.0 else (-30.0 if angle < -30.0 else angle)
+                min_angle=min(x_angle)
+                max_angle = max(x_angle)
+                _angle = max_angle if angle > max_angle else (min_angle if angle < min_angle else angle)
                 return G_f(_angle)
 
             def PR_map(n, betta, angle):
-                x_angle = np.array([3.0, -13.8, -30.0])
-                y_PR = np.array([PRminus3(n, betta)[0][0], PRplus168(n, betta)[0][0], PRplus30(n, betta)[0][0]])
+                y_PR=[fun['PR_f'](n,betta)[0][0] for angle,fun in dict_with_functions.items()]
                 PR_f = np.poly1d(np.polyfit(x_angle, y_PR, 2))
-                _angle = 3.0 if angle > 3.0 else (-30.0 if angle < -30.0 else angle)
+                min_angle=min(x_angle)
+                max_angle = max(x_angle)
+                _angle = max_angle if angle > max_angle else (min_angle if angle < min_angle else angle)
                 return PR_f(_angle)
 
             def eff_map(n, betta, angle):
-                x_angle = np.array([3.0, -13.8, -30.0])
-                y_eff = np.array([effminus3(n, betta)[0][0], effplus168(n, betta)[0][0], effplus30(n, betta)[0][0]])
+                y_eff=[fun['eff_f'](n,betta)[0][0] for angle,fun in dict_with_functions.items()]
                 eff_f = np.poly1d(np.polyfit(x_angle, y_eff, 2))
-                _angle = 3.0 if angle > 3.0 else (-30.0 if angle < -30.0 else angle)
+                min_angle=min(x_angle)
+                max_angle = max(x_angle)
+                _angle = max_angle if angle > max_angle else (min_angle if angle < min_angle else angle)
                 return eff_f(_angle)
 
             rezult=dict(eff_function=eff_map,
                         G_function=G_map,
                         PR_function=PR_map)
+
         else:
             n_map=data_map[0]
             betta_map=data_map[1]
